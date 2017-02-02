@@ -61,6 +61,6 @@ extern char *errorMessage (RC error);
       }									\
   } while(0);
 
-void throw_error();
+void throwError();
 
 #endif

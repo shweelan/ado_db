@@ -41,15 +41,16 @@ void initStorageManager (void) {
   }
   struct stat state;
   int ret;
-  if (stat(PATH_DIR, &state) == -1) { // folder does not Exists
+  // folder does not Exists, create it
+  if (stat(PATH_DIR, &state) == -1) {
     ret = mkdir(PATH_DIR , DEFAULT_MODE);
     if(ret == -1) {
-      return throw_error();
+      return throwError();
     }
   }
   ret = chdir(PATH_DIR);
   if (ret == -1) {
-    return throw_error();
+    return throwError();
   }
   initialized = 1;
 }
@@ -104,7 +105,7 @@ RC openPageFile (char *fileName, SM_FileHandle *fHandle) {
   stat(fileName, &state);
   long file_size = state.st_size;
   fHandle->fileName = fileName;
-  fHandle->totalNumPages = file_size/PAGE_SIZE;
+  fHandle->totalNumPages = (int) (file_size/PAGE_SIZE);
   fHandle->curPagePos = 0;
   setFD(fHandle, fd);
   return RC_OK;
@@ -232,7 +233,6 @@ RC writeCurrentBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
 /* Extend the file by adding new empty block */
 RC appendEmptyBlock (SM_FileHandle *fHandle) {
   SM_PageHandle memPage = (char *) calloc(PAGE_SIZE, sizeof(char));
-  RC ret;
   return writeBlock(fHandle->totalNumPages, fHandle, memPage);
 }
 
