@@ -4,6 +4,10 @@
 #include "stdio.h"
 #include <errno.h>
 
+/*
+  choosing 8192 as block size, because most of the operating systems are implementing blocks of size of power of 2, mostly 4096 or 8192
+  reading smaller or larger that are not power of 2 blocks will waste bytes already feched by the file system
+*/
 /* module wide constants */
 #define PAGE_SIZE 8196
 
