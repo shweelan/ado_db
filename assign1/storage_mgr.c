@@ -116,7 +116,7 @@ RC openPageFile (char *fileName, SM_FileHandle *fHandle) {
   return RC_OK;
 }
 
-/* Close an opeded file */
+/* Close an opened file */
 RC closePageFile (SM_FileHandle *fHandle) {
   if (!isFHandleInit(fHandle)) {
     return RC_FILE_HANDLE_NOT_INIT;
