@@ -35,6 +35,7 @@ errorMessage (RC error)
   return message;
 }
 
+
 void throw_error() {
   printf("OPPS!! something went wrong in storage Initialization, (%s).\n", strerror(errno));
   exit(EXIT_FAILURE);
