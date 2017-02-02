@@ -2,9 +2,14 @@
 #define DBERROR_H
 
 #include "stdio.h"
+#include <errno.h>
 
 /* module wide constants */
-#define PAGE_SIZE 4096
+#define PAGE_SIZE 8196
+
+/* DB path configuration */
+#define PATH_DIR "/tmp/database_ado/"
+#define DEFAULT_MODE 0777
 
 /* return code definitions */
 typedef int RC;
@@ -14,6 +19,9 @@ typedef int RC;
 #define RC_FILE_HANDLE_NOT_INIT 2
 #define RC_WRITE_FAILED 3
 #define RC_READ_NON_EXISTING_PAGE 4
+#define RC_BLOCK_POSITION_ERROR 5
+#define RC_FS_ERROR 6
+#define RC_FILE_ALREADY_EXISTS 7
 
 #define RC_RM_COMPARE_VALUE_OF_DIFFERENT_DATATYPE 200
 #define RC_RM_EXPR_RESULT_IS_NOT_BOOLEAN 201
@@ -53,5 +61,6 @@ extern char *errorMessage (RC error);
       }									\
   } while(0);
 
+void throw_error();
 
 #endif
