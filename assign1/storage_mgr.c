@@ -67,6 +67,11 @@ RC createPageFile (char *fileName) {
   }
   */
 
+  /*
+   * S_IRUSR : Read permission to user ,S_IWUSR : Write permissions to users
+   * S_IRGRP : Read permission to group ,S_IRGRP : Write permission to group
+   * S_IROTH : Read permission to others ,S_IWOTH : Write permission to others
+  */
   mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
   fd = creat(fileName, mode);
   if (fd == -1) {
@@ -111,7 +116,7 @@ RC openPageFile (char *fileName, SM_FileHandle *fHandle) {
   return RC_OK;
 }
 
-/* Close an opeded file */
+/* Close an opened file */
 RC closePageFile (SM_FileHandle *fHandle) {
   if (!isFHandleInit(fHandle)) {
     return RC_FILE_HANDLE_NOT_INIT;
