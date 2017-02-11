@@ -1,250 +1,254 @@
 #include "storage_mgr.h"
+
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
-
-#include <sys/types.h> 
-#include <sys/stat.h> 
-#include <errno.h>
-#include <fcntl.h> 
-#include <unistd.h> 
-
-char *RC_message = NULL;
-
-/* management structure for page files */
-static char *buffer = NULL;
-
-#define GET_FD(fHandle) \
-  *((int *) (fHandle->mgmtInfo))
-
-#define CHECK_FD(fd,emessage) \
-  do { \
-  if (fd < 0 ) { \
-    printf( "Error opening file: %s (%s: %i)\n", strerror(errno),  __FILE__, __LINE__); \
-    RC_message = emessage; \
-    return RC_FILE_NOT_FOUND; \
-  } \
-  } while (0)
-
-#define CHECK_SEEK(seek) \
-  do { \
-  int spos; \
-  spos = (seek); \
-  if (spos < 0 ) { \
-    printf( "Error seeking in file: %s (%s: %i)\n", strerror(errno), __FILE__, __LINE__);	\
-    return RC_FILE_NOT_FOUND; \
-  } \
-  } while (0)
-
-#define CHECK_READ(readcmd) \
-  do { \
-  int bread; \
-  bread = (readcmd); \
-  if (bread < 0 ) { \
-    printf( "Error seeking in file: %s (%s: %i)\n", strerror(errno), __FILE__, __LINE__);	\
-    return RC_FILE_NOT_FOUND; \
-  } \
-  } while (0)
-
-#define CHECK_WRITE(writecmd) \
-  do { \
-  int bwrite; \
-  bwrite = (writecmd); \
-  if (bwrite < 0 ) { \
-    printf( "Error seeking in file: %s (%s: %i)\n", strerror(errno), __FILE__, __LINE__);	\
-    return RC_FILE_NOT_FOUND; \
-  } \
-  } while (0)
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 
-void
-initStorageManager (void)
-{
-  buffer = malloc(PAGE_SIZE);
+/* Get the file descriptor from the file handle */
+int getFd(SM_FileHandle *fHandle) {
+  return *((int*)fHandle->mgmtInfo);
 }
 
-RC 
-createPageFile (char *fileName)
-{
-  int fd;
 
-  fd = open(fileName, O_WRONLY | O_CREAT | O_SYNC, 0644);
-  CHECK_FD(fd,"could not create file");
-
-  // create content of header page (number of total pages = 1) and write to file
-  memset((void *) buffer, 0, PAGE_SIZE);
-  *((int *) buffer) = 1;
-
-  CHECK_WRITE(write (fd, (void *) buffer, PAGE_SIZE));
-
-  // create dummy first data page and write to file
-  memset((void *) buffer, 0, PAGE_SIZE);
-  CHECK_WRITE(write(fd, (void *) buffer, PAGE_SIZE));
-
-  // close file
-  sync();
-  close(fd);
-
-  return RC_OK;
-}
-
-RC 
-openPageFile (char *fileName, SM_FileHandle *fHandle)
-{
-  int fd;
-
-  fd = open(fileName, O_RDWR | O_SYNC);
-  CHECK_FD(fd, "could not open page file");
-	    
-  fHandle->fileName = fileName;
-
-  // read header page and set handle fields
-  CHECK_READ(read(fd, (void *) buffer, PAGE_SIZE));
-
-  fHandle->totalNumPages = *((int *) buffer);
-  fHandle->curPagePos = 0;
+/* Set the file descriptor from the file handle */
+void setFD(SM_FileHandle *fHandle, int fd) {
   fHandle->mgmtInfo = malloc(sizeof(int));
-  GET_FD(fHandle) = fd;
+  *((int*)fHandle->mgmtInfo) = fd;
+}
 
+/* Check if the file handle is initialize */
+int isFHandleInit(SM_FileHandle *fHandle) {
+  return (fHandle->mgmtInfo != NULL);
+}
+
+
+/* A flag to determine if the storage manager is initialized */
+int initialized = 0;
+
+/*
+  initialize the storage manager
+  create the database directory to some pre configured path
+  change directory to that path
+  this function will crash whenever there is an error, because if something went wrong, nothing can be done afterward
+*/
+void initStorageManager (void) {
+  if (initialized) {
+    return;
+  }
+  struct stat state;
+  int ret;
+  // folder does not Exists, create it
+  if (stat(PATH_DIR, &state) == -1) {
+    ret = mkdir(PATH_DIR , DEFAULT_MODE);
+    if(ret == -1) {
+      return throwError();
+    }
+  }
+  ret = chdir(PATH_DIR);
+  if (ret == -1) {
+    return throwError();
+  }
+  initialized = 1;
+}
+
+
+/* Create a file and write an empty block to it */
+RC createPageFile (char *fileName) {
+  initStorageManager();
+  int fd;
+
+  /* in test file, it expects to overwrite the file.
+  if(access(fileName, F_OK) != -1) {
+    return RC_FILE_ALREADY_EXISTS;
+  }
+  */
+
+  /*
+   * S_IRUSR : Read permission to user ,S_IWUSR : Write permissions to users
+   * S_IRGRP : Read permission to group ,S_IRGRP : Write permission to group
+   * S_IROTH : Read permission to others ,S_IWOTH : Write permission to others
+  */
+  mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+  fd = creat(fileName, mode);
+  if (fd == -1) {
+    return RC_FS_ERROR;
+  }
+
+  // write an empty block to file upon creation
+  SM_PageHandle memPage = (char *) calloc(PAGE_SIZE, sizeof(char));
+  size_t writeSize;
+  writeSize = pwrite(fd, memPage, (size_t) PAGE_SIZE, (off_t) 0);
+  if (writeSize == -1) {
+    return RC_FS_ERROR;
+  }
+  // close the file, since it will be reopened when needed
+  int ret = close(fd);
+  if(ret == -1) {
+    return RC_FS_ERROR;
+  }
   return RC_OK;
 }
 
-RC 
-closePageFile (SM_FileHandle *fHandle)
-{ 
-  int spos;
 
-  // write header
-  CHECK_SEEK(lseek(GET_FD(fHandle), 0, SEEK_SET));
-  CHECK_READ(read(GET_FD(fHandle), (void *) buffer, PAGE_SIZE));
+/* Open a file and copy it's properties to the file handle */
+RC openPageFile (char *fileName, SM_FileHandle *fHandle) {
+  initStorageManager();
+  if(access(fileName, F_OK) == -1) {
+    return RC_FILE_NOT_FOUND;
+  }
+  int fd;
+  fd = open(fileName, O_RDWR);
+  if (fd == -1) {
+    return RC_FS_ERROR;
+  }
 
-  *((int *) buffer) = fHandle->totalNumPages;
-  CHECK_SEEK(lseek(GET_FD(fHandle), 0, SEEK_SET));
-  CHECK_WRITE(write(GET_FD(fHandle), (void *) buffer, PAGE_SIZE));
-
-  close(GET_FD(fHandle));
-
-  CHECK_FD(GET_FD(fHandle), "error closing file");
-  free(fHandle->mgmtInfo);
-
+  struct stat state;
+  stat(fileName, &state);
+  long file_size = state.st_size;
+  fHandle->fileName = fileName;
+  fHandle->totalNumPages = (int) (file_size/PAGE_SIZE);
+  fHandle->curPagePos = 0;
+  setFD(fHandle, fd);
   return RC_OK;
 }
 
-RC 
-destroyPageFile (char *fileName)
-{
-  int rt;
-
-  rt = unlink(fileName);
-  CHECK_FD(rt, "could not delete file");
-
+/* Close an opened file */
+RC closePageFile (SM_FileHandle *fHandle) {
+  if (!isFHandleInit(fHandle)) {
+    return RC_FILE_HANDLE_NOT_INIT;
+  }
+  int ret = close(getFd(fHandle));
+  if (ret == -1) {
+    return RC_FS_ERROR;
+  }
   return RC_OK;
 }
 
-/* reading blocks from disc */
-RC 
-readBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage)
-{
-  CHECK_SEEK(lseek(GET_FD(fHandle), (PAGE_SIZE * (pageNum + 1)) - 1, SEEK_SET));
-  CHECK_READ(read(GET_FD(fHandle), (void *) memPage, PAGE_SIZE));
+
+/* Remove a file by it's name */
+RC destroyPageFile (char *fileName) {
+  if(access(fileName, F_OK) == -1) {
+    return RC_FILE_NOT_FOUND;
+  }
+  int ret = unlink(fileName);
+  if (ret == -1) {
+    return RC_FS_ERROR;
+  }
+  return RC_OK;
+}
+
+
+/* Read a block from a file by the block number */
+RC readBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
+  if (!isFHandleInit(fHandle)) {
+    return RC_FILE_HANDLE_NOT_INIT;
+  }
+  if (pageNum < 0 || pageNum >= fHandle->totalNumPages) {
+    return RC_BLOCK_POSITION_ERROR;
+  }
+  memPage = malloc(sizeof(char) * PAGE_SIZE);
+  size_t readSize;
+  // Choosing pread/pwrite is more stable in performance and faster than seek+read/write and it is multi thread friendly
+  readSize = pread(getFd(fHandle), memPage, (size_t) PAGE_SIZE, (off_t) pageNum * PAGE_SIZE);
+  if (readSize == -1) {
+    return RC_FS_ERROR;
+  }
   fHandle->curPagePos = pageNum + 1;
-
   return RC_OK;
 }
 
-int
-getBlockPos (SM_FileHandle *fHandle)
-{
+
+/* get the current block position */
+int getBlockPos (SM_FileHandle *fHandle) {
+  if (!isFHandleInit(fHandle)) {
+    // here can not return RC_FILE_HANDLE_NOT_INIT, because it is integer value, -1 means no fHandle
+    return -1;
+  }
   return fHandle->curPagePos;
 }
 
-RC
-readFirstBlock (SM_FileHandle *fHandle, SM_PageHandle memPage)
-{
-  CHECK_SEEK(lseek(GET_FD(fHandle), PAGE_SIZE - 1, SEEK_SET));
-  CHECK_READ(read(GET_FD(fHandle), (void *) memPage, PAGE_SIZE));
-  fHandle->curPagePos = 1;
-  
-  return RC_OK;
+
+/* Read the first Block of the File */
+RC readFirstBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
+  return readBlock(0, fHandle, memPage);
 }
 
-RC
-readPreviousBlock (SM_FileHandle *fHandle, SM_PageHandle memPage)
-{
-  if (fHandle->curPagePos == 0)
-    return RC_READ_NON_EXISTING_PAGE;
 
-  CHECK_SEEK(lseek(GET_FD(fHandle), -PAGE_SIZE, SEEK_CUR));
-  CHECK_READ(read(GET_FD(fHandle), (void *) memPage, PAGE_SIZE));
-  fHandle->curPagePos--;
-
-  return RC_OK;
+/* Read the block that is previous to current position */
+RC readPreviousBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
+  int pageNum = fHandle->curPagePos - 1;
+  return readBlock(pageNum, fHandle, memPage);
 }
 
-RC
-readCurrentBlock (SM_FileHandle *fHandle, SM_PageHandle memPage)
-{
-  CHECK_READ(read(GET_FD(fHandle), (void *) memPage, PAGE_SIZE));
-  
-  return RC_OK;
+
+/* Read the block that is currently pointed to by the page position pointer */
+RC readCurrentBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
+  return readBlock(fHandle->curPagePos, fHandle, memPage);
 }
 
-RC 
-readNextBlock (SM_FileHandle *fHandle, SM_PageHandle memPage)
-{
-  CHECK_SEEK(lseek(GET_FD(fHandle), -PAGE_SIZE, SEEK_CUR));
-  CHECK_READ(read(GET_FD(fHandle), (void *) memPage, PAGE_SIZE));
-  fHandle->curPagePos++;
 
-  return RC_OK;
+/* Read the block that is next to current position */
+RC readNextBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
+  int pageNum = fHandle->curPagePos + 1;
+  return readBlock(pageNum, fHandle, memPage);
 }
 
-RC 
-readLastBlock (SM_FileHandle *fHandle, SM_PageHandle memPage)
-{
-  CHECK_SEEK(lseek(GET_FD(fHandle), (fHandle->totalNumPages * PAGE_SIZE) -1, SEEK_SET));
-  CHECK_READ(read(GET_FD(fHandle), (void *) memPage, PAGE_SIZE));
-  fHandle->curPagePos = fHandle->totalNumPages;
 
-  return RC_OK;
+/* Read the last block in the file */
+RC readLastBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
+  int pageNum = fHandle->totalNumPages - 1;
+  return readBlock(pageNum, fHandle, memPage);
 }
 
-/* writing blocks to a page file */
-RC
-writeBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage)
-{
-  CHECK_SEEK(lseek(GET_FD(fHandle), ((pageNum + 1) * PAGE_SIZE) - 1, SEEK_SET));
-  CHECK_WRITE(write(GET_FD(fHandle), (void *) memPage, PAGE_SIZE));
+
+/* write a block to a file by the block number */
+RC writeBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
+  if (!isFHandleInit(fHandle)) {
+    return RC_FILE_HANDLE_NOT_INIT;
+  }
+  // here is only > so that we can append to the end of the file but we can not skip a block
+  if (pageNum < 0 || pageNum > fHandle->totalNumPages) {
+    return RC_BLOCK_POSITION_ERROR;
+  }
+  size_t writeSize;
+  // Choosing pread/pwrite is more stable in performance and faster than seek+read/write and it is multi thread friendly
+  writeSize = pwrite(getFd(fHandle), memPage, (size_t) PAGE_SIZE, (off_t) pageNum * PAGE_SIZE);
+  if (writeSize == -1) {
+    return RC_WRITE_FAILED;
+  }
   fHandle->curPagePos = pageNum + 1;
-
+  // means we added new block
+  if (pageNum == fHandle->totalNumPages) {
+    fHandle->totalNumPages++;
+  }
   return RC_OK;
 }
 
-RC 
-writeCurrentBlock (SM_FileHandle *fHandle, SM_PageHandle memPage)
-{
-  CHECK_WRITE(write(GET_FD(fHandle), (void *) memPage, PAGE_SIZE));
-  fHandle->curPagePos++;
 
-  return RC_OK;
+/* write the block that is currently pointed to by the page position pointer */
+RC writeCurrentBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
+  return writeBlock(fHandle->curPagePos, fHandle, memPage);
 }
 
-RC 
-appendEmptyBlock (SM_FileHandle *fHandle)
-{
-  CHECK_SEEK(lseek(GET_FD(fHandle), ((fHandle->totalNumPages + 1) * PAGE_SIZE) - 1, SEEK_SET));
-  memset(buffer, 0, PAGE_SIZE);
-  CHECK_WRITE(write(GET_FD(fHandle), (void *) buffer, PAGE_SIZE));
-  fHandle->curPagePos = ++(fHandle->totalNumPages);
 
-  return RC_OK;
+/* Extend the file by adding new empty block */
+RC appendEmptyBlock (SM_FileHandle *fHandle) {
+  SM_PageHandle memPage = (char *) calloc(PAGE_SIZE, sizeof(char));
+  return writeBlock(fHandle->totalNumPages, fHandle, memPage);
 }
 
-RC 
-ensureCapacity (int numberOfPages, SM_FileHandle *fHandle)
-{
-  while(fHandle->totalNumPages < numberOfPages)
-    appendEmptyBlock(fHandle);
+
+/* Ensure ensure the that the file is extended to some number of pages */
+RC ensureCapacity (int numberOfPages, SM_FileHandle *fHandle) {
+  RC ret;
+  while (numberOfPages > fHandle->totalNumPages) {
+    if ((ret = appendEmptyBlock(fHandle)) != RC_OK) {
+      return ret;
+    }
+  }
   return RC_OK;
 }
-

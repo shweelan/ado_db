@@ -30,5 +30,6 @@ int hash(int key);
 int hmInsert(HM *hm, int key, void *val);
 void *hmGet(HM *hm, int key);
 int hmDelete(HM *hm, int key);
+void hmDestroy(HM *hm);
 
 #endif

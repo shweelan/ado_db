@@ -77,10 +77,7 @@ int hmDelete(HM *hm, int key) {
   int indx = hash(key);
   Node *head = hm->tbl[indx];
   HM_Comb *comb = NULL;
-  while(true) {
-    if (head == NULL) {
-      return 0; // means not found
-    }
+  while(head != NULL) {
     comb = (HM_Comb *)(head->data);
     if (comb->key == key) {
       if (head->previous == NULL) { // is it found on the first element of linked list?
@@ -98,8 +95,24 @@ int hmDelete(HM *hm, int key) {
     }
     head = head->next;
   }
+  return 0; // means not found
 }
 
+
+void hmDestroy(HM *hm) {
+  Node *next = NULL;
+  for(int i = 0; i < HASH_LEN; i++) {
+    Node *head = hm->tbl[i];
+    while (head != NULL) {
+      next = head;
+      free(head->data);
+      free(head);
+      head = next;
+      next = NULL;
+    }
+  }
+  free(hm);
+}
 // test, will remove later
 
 typedef struct X {
