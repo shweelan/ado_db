@@ -147,10 +147,15 @@ RC readBlock (int pageNum, SM_FileHandle *fHandle, SM_PageHandle memPage) {
   if (!isFHandleInit(fHandle)) {
     return RC_FILE_HANDLE_NOT_INIT;
   }
-  if (pageNum < 0 || pageNum >= fHandle->totalNumPages) {
+  if (pageNum < 0) {
     return RC_BLOCK_POSITION_ERROR;
   }
-  memPage = malloc(sizeof(char) * PAGE_SIZE);
+  if (pageNum >= fHandle->totalNumPages) {
+    RC err = ensureCapacity(pageNum, fHandle);
+    if (err != RC_OK) {
+      return err;
+    }
+  }
   size_t readSize;
   // Choosing pread/pwrite is more stable in performance and faster than seek+read/write and it is multi thread friendly
   readSize = pread(getFd(fHandle), memPage, (size_t) PAGE_SIZE, (off_t) pageNum * PAGE_SIZE);

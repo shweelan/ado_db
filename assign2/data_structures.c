@@ -100,35 +100,15 @@ int hmDelete(HM *hm, int key) {
 
 
 void hmDestroy(HM *hm) {
-  Node *next = NULL;
+  Node *deletable = NULL;
   for(int i = 0; i < HASH_LEN; i++) {
     Node *head = hm->tbl[i];
     while (head != NULL) {
-      next = head;
-      free(head->data);
-      free(head);
-      head = next;
-      next = NULL;
+      deletable = head;
+      head = head->next;
+      free(deletable->data);
+      free(deletable);
     }
   }
   free(hm);
-}
-// test, will remove later
-
-typedef struct X {
-  int d;
-} X;
-
-int main(int argc, char *argv[]) {
-  HM *hm = hmInit();
-  X *x = malloc(sizeof(X));
-  x->d = 44;
-  printf("insert 5 = %d\n", hmInsert(hm, 5, x));
-  printf("insert 55 = %d\n", hmInsert(hm, 55, x));
-  printf("insert 5 = %d\n", hmInsert(hm, 5, x));
-  X *new_x = (X *)(hmGet(hm, 5));
-  printf("get 5 = %d\n", new_x->d);
-  printf("delete 5 = %d\n", hmDelete(hm, 5));
-  printf("delete 5 = %d\n", hmDelete(hm, 5));
-  printf("get 5 = %s\n", hmGet(hm, 5));
 }

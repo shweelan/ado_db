@@ -27,6 +27,10 @@ typedef int RC;
 #define RC_FS_ERROR 6
 #define RC_FILE_ALREADY_EXISTS 7
 
+#define RC_NO_SPACE_IN_POOL 100
+#define RC_STRATEGY_NOT_SUPPORTED 101
+#define RC_ERROR_NO_PAGE 102
+
 #define RC_RM_COMPARE_VALUE_OF_DIFFERENT_DATATYPE 200
 #define RC_RM_EXPR_RESULT_IS_NOT_BOOLEAN 201
 #define RC_RM_BOOLEAN_EXPR_ARG_IS_NOT_BOOLEAN 202
@@ -38,6 +42,8 @@ typedef int RC;
 #define RC_IM_KEY_ALREADY_EXISTS 301
 #define RC_IM_N_TO_LAGE 302
 #define RC_IM_NO_MORE_ENTRIES 303
+
+#define RC_GENERAL_ERROR 500
 
 /* holder for error messages */
 extern char *RC_message;
