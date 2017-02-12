@@ -61,9 +61,101 @@ void setStatistics(BM_BufferPool *bm, PageFrameInfo *frame, int position) {
 }
 
 
-RC lru(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
+RC writeDirtyPage(BM_BufferPool *bm, PageFrameInfo *frame) {
+  //Write dirty page into memory
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
+  RC writeStatus = writeBlock(frame->pageNum,  pmi->fHandle, frame->pageData);
+  if (writeStatus != RC_OK) {
+    return writeStatus;
+  }
+  pmi->statistics->writeIO++;
+  setDirty(bm, frame, false);
+  return RC_OK;
+}
+
+
+RC replacement(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
+  PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
+  RC err = readBlock(pageNum, pmi->fHandle, frame->pageData);
+  if (err != RC_OK) {
+    return err;
+  }
+  pmi->statistics->readIO++;
+  int position;
+  if (pmi->statistics->readIO > bm->numPages) {
+    PageFrameInfo *toReplace = NULL;
+    // here goes the replacement
+    Node *tmp = pmi->head;
+    while(true) {
+      toReplace = (PageFrameInfo *)(tmp->data);
+      if (toReplace->fixCount == 0) {
+        break;
+      }
+      tmp = tmp->next;
+      if (tmp == NULL) {
+        return RC_NO_SPACE_IN_POOL;
+      }
+    }
+    position = toReplace->statisticsPosition;
+    if (toReplace->dirty) {
+      RC err = writeDirtyPage(bm, toReplace);
+      if (err != RC_OK) {
+        return err;
+      }
+    }
+    // remove from linked list
+    if (tmp == pmi->head || tmp == pmi->tail) {
+      if (tmp == pmi->head) {
+        pmi->head = tmp->next;
+        pmi->head->previous = NULL;
+      }
+      if (tmp == pmi->tail) {
+        pmi->tail = tmp->previous;
+        pmi->tail->next = NULL;
+      }
+    }
+    else {
+      tmp->previous->next = tmp->next;
+      tmp->next->previous = tmp->previous;
+    }
+    hmDelete(pmi->hm, toReplace->pageNum);
+    destroyFrame(toReplace);
+    free(tmp);
+  }
+  else {
+    position = pmi->statistics->readIO - 1;
+  }
+  frame->pageNum = pageNum;
+  Node *node = malloc(sizeof(Node));
+  node->next = NULL;
+  node->previous = NULL;
+  node->data = frame;
+  if (pmi->head == NULL && pmi->tail == NULL) {
+    pmi->head = node;
+    pmi->tail = node;
+  }
+  else {
+    pmi->tail->next = node;
+    node->previous = pmi->tail;
+    pmi->tail = node;
+  }
+  hmInsert(pmi->hm, frame->pageNum, node); // free using hmDelete();
+  setStatistics(bm, frame, position);
+  return RC_OK;
+}
+
+
+RC fifo(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
   if (frame->pageNum != NO_PAGE) {
+    return RC_OK;
+  }
+  return replacement(bm, frame, pageNum);
+}
+
+
+RC lru(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
+  if (frame->pageNum != NO_PAGE) {
+    PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
     // shuffle the linked list
     Node *node = (Node *)(hmGet(pmi->hm, pageNum));
     if (node == pmi->tail) {
@@ -87,74 +179,7 @@ RC lru(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
     return RC_OK;
   }
   else {
-    // TODO make it function
-    RC err = readBlock(pageNum, pmi->fHandle, frame->pageData);
-    if (err != RC_OK) {
-      return err;
-    }
-    pmi->statistics->readIO++;
-    int position;
-    if (pmi->statistics->readIO > bm->numPages) {
-      PageFrameInfo *toReplace = NULL;
-      // here goes the replacement
-      Node *tmp = pmi->head;
-      while(true) {
-        toReplace = (PageFrameInfo *)(tmp->data);
-        if (toReplace->fixCount == 0) {
-          break;
-        }
-        tmp = tmp->next;
-        if (tmp == NULL) {
-          return RC_NO_SPACE_IN_POOL;
-        }
-      }
-      position = toReplace->statisticsPosition;
-      if (toReplace->dirty) {
-        RC err = writeBlock(toReplace->pageNum,  pmi->fHandle, toReplace->pageData);
-        if (err != RC_OK) {
-          return err;
-        }
-        pmi->statistics->writeIO++;
-      }
-      // remove from linked list
-      if (tmp == pmi->head || tmp == pmi->tail) {
-        if (tmp == pmi->head) {
-          pmi->head = tmp->next;
-          pmi->head->previous = NULL;
-        }
-        if (tmp == pmi->tail) {
-          pmi->tail = tmp->previous;
-          pmi->tail->next = NULL;
-        }
-      }
-      else {
-        tmp->previous->next = tmp->next;
-        tmp->next->previous = tmp->previous;
-      }
-      hmDelete(pmi->hm, toReplace->pageNum);
-      destroyFrame(toReplace);
-      free(tmp);
-    }
-    else {
-      position = pmi->statistics->readIO - 1;
-    }
-    frame->pageNum = pageNum;
-    Node *node = malloc(sizeof(Node));
-    node->next = NULL;
-    node->previous = NULL;
-    node->data = frame;
-    if (pmi->head == NULL && pmi->tail == NULL) {
-      pmi->head = node;
-      pmi->tail = node;
-    }
-    else {
-      pmi->tail->next = node;
-      node->previous = pmi->tail;
-      pmi->tail = node;
-    }
-    hmInsert(pmi->hm, frame->pageNum, node); // free using hmDelete();
-    setStatistics(bm, frame, position);
-    return RC_OK;
+    return replacement(bm, frame, pageNum);
   }
 }
 
@@ -216,12 +241,10 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
   while(tmp != NULL) {
     frame = (PageFrameInfo *)(tmp->data);
     if (frame->dirty) {
-      // TODO make it function
-      RC err = writeBlock(frame->pageNum,  pmi->fHandle, frame->pageData);
+      RC err = writeDirtyPage(bm, frame);
       if (err != RC_OK) {
         return err;
       }
-      pmi->statistics->writeIO++;
     }
     free(frame->pageData);
     free(frame);
@@ -251,12 +274,10 @@ RC forceFlushPool(BM_BufferPool *const bm) {
     frame = (PageFrameInfo *)(tmp->data);
     if (frame->dirty) {
       // TODO check the fixCount
-      RC err = writeBlock(frame->pageNum,  pmi->fHandle, frame->pageData);
+      RC err = writeDirtyPage(bm, frame);
       if (err != RC_OK) {
         return err;
       }
-      pmi->statistics->writeIO++;
-      setDirty(bm, frame, false);
     }
     tmp = tmp->next;
   }
@@ -303,14 +324,15 @@ RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page) {
 
 RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
   PageFrameInfo *frame = getFrameByPageNumber(bm, page->pageNum);
-  // TODO check if frame is NULL, check if frame fixCount == 0
-  PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
-  RC err = writeBlock(frame->pageNum,  pmi->fHandle, frame->pageData);
+  if (frame == NULL) {
+    return RC_ERROR_NO_PAGE;
+  }
+  // TODO if not dirty just return
+  // TODO check if frame fixCount == 0
+  RC err = writeDirtyPage(bm, frame);
   if (err != RC_OK) {
     return err;
   }
-  pmi->statistics->writeIO++;
-  setDirty(bm, frame, false);
   return RC_OK;
 }
 
