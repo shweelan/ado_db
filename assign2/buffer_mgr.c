@@ -7,7 +7,7 @@
 
 PageFrameInfo * initFrame() {
   PageFrameInfo *frame = malloc(sizeof(PageFrameInfo));
-  frame->pageData = malloc(sizeof(char) * PAGE_SIZE); // TODO it is alocated in readBlock
+  frame->pageData = malloc(sizeof(char) * PAGE_SIZE); // TODO it is alocated in readBlock .. Done in destroyFrame
   frame->pageNum = NO_PAGE;
   frame->fixCount = 0;
   frame->dirty = false;
@@ -18,8 +18,8 @@ PageFrameInfo * initFrame() {
 void destroyFrame(PageFrameInfo *frame) {
   free(frame->pageData);
   free(frame);
-  // TODO remove from hashmap if it is there
-  // TODO remove from linked list
+  // TODO remove from hashmap if it is there .. Done in replacement
+  // TODO remove from linked list .. Done in replacement
 }
 
 
@@ -126,7 +126,7 @@ RC replacement(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
     position = pmi->statistics->readIO - 1;
   }
   frame->pageNum = pageNum;
-  Node *node = malloc(sizeof(Node));
+  Node *node = malloc(sizeof(Node)); // TODO free it .. Done in replacement
   node->next = NULL;
   node->previous = NULL;
   node->data = frame;
@@ -186,7 +186,7 @@ RC lru(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
 
 RC execStrategy(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
   if (bm->strategy == RS_FIFO) {
-    return lru(bm, frame, pageNum);
+    return fifo(bm, frame, pageNum);
   }
   if (bm->strategy == RS_LRU) {
     return lru(bm, frame, pageNum);
@@ -198,10 +198,10 @@ RC execStrategy(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
 //functionality
 
 RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const int numPages, ReplacementStrategy strategy, void *stratData) {
-  SM_FileHandle *fHandle = malloc(sizeof(SM_FileHandle));// TODO free it
-  char *fname = malloc(sizeof(char) * strlen(pageFileName));// free it
+  SM_FileHandle *fHandle = malloc(sizeof(SM_FileHandle));// TODO free it .. Done in shutdownBufferPool
+  char *fname = malloc(sizeof(char) * strlen(pageFileName));// TODO free it .. Done in shutdownBufferPool
   strcpy(fname, pageFileName); // copying the const char* const to char*
-  RC err = openPageFile(fname, fHandle); // TODO close it
+  RC err = openPageFile(fname, fHandle); // TODO close it .. Done in shutdownBufferPool
   if (err != RC_OK) {
     return err;
   }
@@ -209,16 +209,16 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
   bm->pageFile = fname;
   bm->numPages = numPages;
   bm->strategy = strategy;
-  PoolMgmtInfo *pmi = malloc(sizeof(PoolMgmtInfo)); // TODO free it
-  pmi->hm = hmInit(); // TODO free it, use hmDestroy(hm)
+  PoolMgmtInfo *pmi = malloc(sizeof(PoolMgmtInfo)); // TODO free it .. Done in shutdownBufferPool
+  pmi->hm = hmInit(); // TODO free it, use hmDestroy(hm) .. Done in shutdownBufferPool
   pmi->head = NULL;
   pmi->tail = NULL;
   pmi->fHandle = fHandle;
 
-  pmi->statistics = malloc(sizeof(Statistics)); // TODO free it
-  pmi->statistics->pageNumbers = malloc(sizeof(int) * bm->numPages); // TODO free it
-  pmi->statistics->fixCounts = calloc(sizeof(int) * bm->numPages, sizeof(int)); // TODO free it
-  pmi->statistics->dirtyFlags = calloc(sizeof(int) * bm->numPages, sizeof(int)); // TODO free it
+  pmi->statistics = malloc(sizeof(Statistics)); // TODO free it .. Done in shutdownBufferPool
+  pmi->statistics->pageNumbers = malloc(sizeof(int) * bm->numPages); // TODO free it .. Done in shutdownBufferPool
+  pmi->statistics->fixCounts = calloc(sizeof(int) * bm->numPages, sizeof(int)); // TODO free it .. Done in shutdownBufferPool
+  pmi->statistics->dirtyFlags = calloc(sizeof(int) * bm->numPages, sizeof(int)); // TODO free it .. Done in shutdownBufferPool
   for (int i = 0; i < bm->numPages; i++) {
     pmi->statistics->pageNumbers[i] = -1;
   }
@@ -233,7 +233,6 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
 RC shutdownBufferPool(BM_BufferPool *const bm) {
   // TODO check it million times
   // TODO check any fixCount
-  // TODO check any dirty and write
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   Node *tmp = pmi->head;
   Node *deletable;
@@ -246,13 +245,12 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
         return err;
       }
     }
-    free(frame->pageData);
-    free(frame);
+    destroyFrame(frame);
     deletable = tmp;
     tmp = tmp->next;
     free(deletable);
   }
-  hmDestroy(pmi->hm); // this will free the Node->data, i.e head->data
+  hmDestroy(pmi->hm);
   RC err =  closePageFile(pmi->fHandle);
   if (err != RC_OK) {
     return err;
@@ -262,6 +260,8 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
   free(pmi->statistics->dirtyFlags);
   free(pmi->statistics);
   free(pmi->fHandle);
+  free(pmi);
+  free(bm->pageFile);
   return RC_OK;
 }
 
@@ -286,9 +286,10 @@ RC forceFlushPool(BM_BufferPool *const bm) {
 
 
 RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber pageNum) {
+  printf("Pin page#%d\n", pageNum);
   PageFrameInfo *frame = getFrameByPageNumber(bm, pageNum);
   if (frame == NULL) {
-    frame = initFrame(); // TODO free, use destroyFrame(frame)
+    frame = initFrame(); // TODO free, use destroyFrame(frame) .. Done in shutdownBufferPool, replacement
   }
   RC err = execStrategy(bm, frame, pageNum);
   if (err != RC_OK) {
