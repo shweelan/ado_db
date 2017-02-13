@@ -1,8 +1,9 @@
+all: run1 run2
 run1: test_assign2_1.o dberror.o storage_mgr.o buffer_mgr.o buffer_mgr_stat.o data_structures.o
-	gcc -o bin/run1 bin/*.o
+	gcc -o bin/test1/run bin/test_assign2_1.o bin/dberror.o bin/storage_mgr.o bin/buffer_mgr.o bin/buffer_mgr_stat.o bin/data_structures.o
 
 run2: test_assign2_2.o dberror.o storage_mgr.o buffer_mgr.o buffer_mgr_stat.o data_structures.o
-	gcc -o bin/run2 bin/*.o
+	gcc -o bin/test2/run bin/test_assign2_2.o bin/dberror.o bin/storage_mgr.o bin/buffer_mgr.o bin/buffer_mgr_stat.o bin/data_structures.o
 
 test_assign2_1.o: test_assign2_1.c test_helper.h dberror.h storage_mgr.h buffer_mgr.h data_structures.h buffer_mgr_stat.h dt.h
 	gcc -c test_assign2_1.c -o bin/test_assign2_1.o
@@ -26,4 +27,4 @@ dberror.o: dberror.c dberror.h
 	gcc -c dberror.c -o bin/dberror.o
 
 clean:
-	-rm bin/*.o bin/run1 bin/run2
+	-rm bin/*.o bin/test1/run bin/test2/run
