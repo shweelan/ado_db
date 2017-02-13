@@ -371,7 +371,8 @@ testLRU (void)
     {
       pinPage(bm, h, i);
       unpinPage(bm, h);
-      ASSERT_EQUALS_POOL(poolContents[snapshot++], bm, "check pool content reading in pages");
+      ASSERT_EQUALS_POOL(poolContents[snapshot], bm, "check pool content reading in pages");
+      snapshot++;
     }
 
   // read pages to change LRU order
@@ -379,7 +380,8 @@ testLRU (void)
     {
       pinPage(bm, h, orderRequests[i]);
       unpinPage(bm, h);
-      ASSERT_EQUALS_POOL(poolContents[snapshot++], bm, "check pool content using pages");
+      ASSERT_EQUALS_POOL(poolContents[snapshot], bm, "check pool content using pages");
+      snapshot++;
     }
 
   // replace pages and check that it happens in LRU order
@@ -387,12 +389,13 @@ testLRU (void)
     {
       pinPage(bm, h, 5 + i);
       unpinPage(bm, h);
-      ASSERT_EQUALS_POOL(poolContents[snapshot++], bm, "check pool content using pages");
+      ASSERT_EQUALS_POOL(poolContents[snapshot], bm, "check pool content using pages");
+      snapshot++;
     }
 
   // check number of write IOs
   ASSERT_EQUALS_INT(0, getNumWriteIO(bm), "check number of write I/Os");
-  ASSERT_EQUALS_INT(8, getNumReadIO(bm), "check number of read I/Os");
+  ASSERT_EQUALS_INT(10, getNumReadIO(bm), "check number of read I/Os");
 
 
   CHECK(shutdownBufferPool(bm));
