@@ -286,7 +286,6 @@ RC forceFlushPool(BM_BufferPool *const bm) {
 
 
 RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber pageNum) {
-  printf("Pin page#%d\n", pageNum);
   PageFrameInfo *frame = getFrameByPageNumber(bm, pageNum);
   if (frame == NULL) {
     frame = initFrame(); // TODO free, use destroyFrame(frame) .. Done in shutdownBufferPool, replacement
