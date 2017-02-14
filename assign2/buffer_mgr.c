@@ -7,7 +7,7 @@
 
 PageFrameInfo * initFrame() {
   PageFrameInfo *frame = malloc(sizeof(PageFrameInfo));
-  frame->pageData = malloc(sizeof(char) * PAGE_SIZE); // TODO it is alocated in readBlock .. Done in destroyFrame
+  frame->pageData = malloc(sizeof(char) * PAGE_SIZE); // TODO free it .. Done in destroyFrame
   frame->pageNum = NO_PAGE;
   frame->fixCount = 0;
   frame->dirty = false;
@@ -139,7 +139,7 @@ RC replacement(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
     node->previous = pmi->tail;
     pmi->tail = node;
   }
-  hmInsert(pmi->hm, frame->pageNum, node); // free using hmDelete();
+  hmInsert(pmi->hm, frame->pageNum, node); // TODO free using hmDelete() .. Done in replacement
   setStatistics(bm, frame, position);
   return RC_OK;
 }
@@ -232,8 +232,6 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
 
 
 RC shutdownBufferPool(BM_BufferPool *const bm) {
-  // TODO check it million times
-  // TODO check any fixCount
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   Node *tmp = pmi->head;
   Node *deletable;
@@ -274,8 +272,7 @@ RC forceFlushPool(BM_BufferPool *const bm) {
   PageFrameInfo *frame;
   while (tmp != NULL) {
     frame = (PageFrameInfo *)(tmp->data);
-    if (frame->dirty) {
-      // TODO check the fixCount
+    if (frame->dirty && frame->fixCount == 0) {
       RC err = writeDirtyPage(bm, frame);
       if (err != RC_OK) {
         return err;
@@ -329,8 +326,12 @@ RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
   if (frame == NULL) {
     return RC_ERROR_NO_PAGE;
   }
-  // TODO if not dirty just return
-  // TODO check if frame fixCount == 0
+  if (!frame->dirty) {
+    return RC_OK;
+  }
+  if (frame->fixCount > 0) {
+    return RC_ERROR_NOT_FREE_FRAME;
+  }
   RC err = writeDirtyPage(bm, frame);
   if (err != RC_OK) {
     return err;
