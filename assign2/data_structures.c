@@ -5,7 +5,8 @@
 HM *hmInit() {
   HM *hm = NULL;
   hm = malloc(sizeof(HM));
-  for(int i = 0; i < HASH_LEN; i++) {
+  int i;
+  for(i = 0; i < HASH_LEN; i++) {
     hm->tbl[i] = NULL;
   }
   return hm;
@@ -101,7 +102,8 @@ int hmDelete(HM *hm, int key) {
 
 void hmDestroy(HM *hm) {
   Node *deletable = NULL;
-  for(int i = 0; i < HASH_LEN; i++) {
+  int i;
+  for(i = 0; i < HASH_LEN; i++) {
     Node *head = hm->tbl[i];
     while (head != NULL) {
       deletable = head;

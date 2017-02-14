@@ -219,7 +219,8 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
   pmi->statistics->pageNumbers = malloc(sizeof(int) * bm->numPages); // TODO free it .. Done in shutdownBufferPool
   pmi->statistics->fixCounts = calloc(sizeof(int) * bm->numPages, sizeof(int)); // TODO free it .. Done in shutdownBufferPool
   pmi->statistics->dirtyFlags = calloc(sizeof(int) * bm->numPages, sizeof(int)); // TODO free it .. Done in shutdownBufferPool
-  for (int i = 0; i < bm->numPages; i++) {
+  int i;
+  for (i = 0; i < bm->numPages; i++) {
     pmi->statistics->pageNumbers[i] = -1;
   }
   pmi->statistics->readIO = 0;
