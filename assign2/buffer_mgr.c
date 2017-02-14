@@ -260,6 +260,7 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
   free(pmi->statistics->dirtyFlags);
   free(pmi->statistics);
   free(pmi->fHandle);
+  free(pmi->fHandle->mgmtInfo);
   free(pmi);
   free(bm->pageFile);
   return RC_OK;

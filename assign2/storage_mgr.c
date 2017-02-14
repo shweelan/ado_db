@@ -82,6 +82,7 @@ RC createPageFile (char *fileName) {
   SM_PageHandle memPage = (char *) calloc(PAGE_SIZE, sizeof(char));
   size_t writeSize;
   writeSize = pwrite(fd, memPage, (size_t) PAGE_SIZE, (off_t) 0);
+  free(memPage);
   if (writeSize == -1) {
     return RC_FS_ERROR;
   }
@@ -243,7 +244,9 @@ RC writeCurrentBlock (SM_FileHandle *fHandle, SM_PageHandle memPage) {
 /* Extend the file by adding new empty block */
 RC appendEmptyBlock (SM_FileHandle *fHandle) {
   SM_PageHandle memPage = (char *) calloc(PAGE_SIZE, sizeof(char));
-  return writeBlock(fHandle->totalNumPages, fHandle, memPage);
+  RC err = writeBlock(fHandle->totalNumPages, fHandle, memPage);
+  free(memPage);
+  return err;
 }
 
 
