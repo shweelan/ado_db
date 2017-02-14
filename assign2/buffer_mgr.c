@@ -5,6 +5,7 @@
 
 // helpers
 
+// Initialize the frame.
 PageFrameInfo * initFrame() {
   PageFrameInfo *frame = malloc(sizeof(PageFrameInfo));
   frame->pageData = malloc(sizeof(char) * PAGE_SIZE); // TODO free it .. Done in destroyFrame
@@ -15,6 +16,7 @@ PageFrameInfo * initFrame() {
 }
 
 
+// Cleaning frame resources
 void destroyFrame(PageFrameInfo *frame) {
   free(frame->pageData);
   free(frame);
@@ -23,6 +25,7 @@ void destroyFrame(PageFrameInfo *frame) {
 }
 
 
+// finding a frame by page number
 PageFrameInfo *getFrameByPageNumber(BM_BufferPool *bm, PageNumber pageNum) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   Node *node = (Node *)(hmGet(pmi->hm, pageNum));
@@ -34,6 +37,7 @@ PageFrameInfo *getFrameByPageNumber(BM_BufferPool *bm, PageNumber pageNum) {
 }
 
 
+// setting a frame as dirty
 void setDirty(BM_BufferPool *bm, PageFrameInfo *frame, bool flag) {
   frame->dirty = flag;
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
@@ -41,6 +45,7 @@ void setDirty(BM_BufferPool *bm, PageFrameInfo *frame, bool flag) {
 }
 
 
+// fix count inc and dec when pin and unpin
 void incDecFixCount(BM_BufferPool *bm, PageFrameInfo *frame, bool isInc) {
   int i = -1;
   if (isInc) {
@@ -52,6 +57,7 @@ void incDecFixCount(BM_BufferPool *bm, PageFrameInfo *frame, bool isInc) {
 }
 
 
+// setting the statistics values for each frame
 void setStatistics(BM_BufferPool *bm, PageFrameInfo *frame, int position) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   pmi->statistics->pageNumbers[position] = frame->pageNum;
@@ -61,6 +67,7 @@ void setStatistics(BM_BufferPool *bm, PageFrameInfo *frame, int position) {
 }
 
 
+// writing a page back to file
 RC writeDirtyPage(BM_BufferPool *bm, PageFrameInfo *frame) {
   //Write dirty page into memory
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
@@ -74,6 +81,7 @@ RC writeDirtyPage(BM_BufferPool *bm, PageFrameInfo *frame) {
 }
 
 
+// frame replacement strategy, works well for fifo and for LRU, since LRU shuffling is done somewhere else.
 RC replacement(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   RC err = readBlock(pageNum, pmi->fHandle, frame->pageData);
@@ -145,6 +153,7 @@ RC replacement(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
 }
 
 
+// FIFO strategy, works only when adding new page from file.
 RC fifo(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
   if (frame->pageNum != NO_PAGE) {
     return RC_OK;
@@ -153,6 +162,7 @@ RC fifo(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
 }
 
 
+// adding new page from file, or shuffle the frame position when it is pinned
 RC lru(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
   if (frame->pageNum != NO_PAGE) {
     PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
@@ -184,6 +194,7 @@ RC lru(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
 }
 
 
+// called on each pin
 RC execStrategy(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
   if (bm->strategy == RS_FIFO) {
     return fifo(bm, frame, pageNum);
@@ -197,6 +208,8 @@ RC execStrategy(BM_BufferPool *bm, PageFrameInfo *frame, PageNumber pageNum) {
 
 //functionality
 
+// Initialize buffer pool with all the data_structures
+// linked list to hold the frames, and statistics to hold the statistics, and hashmap for direct access
 RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const int numPages, ReplacementStrategy strategy, void *stratData) {
   SM_FileHandle *fHandle = malloc(sizeof(SM_FileHandle));// TODO free it .. Done in shutdownBufferPool
   char *fname = malloc(sizeof(char) * strlen(pageFileName));// TODO free it .. Done in shutdownBufferPool
@@ -231,6 +244,7 @@ RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, const
 }
 
 
+// Shuting down the buffer pool and release all the resources, writing all dirty pages back to disk
 RC shutdownBufferPool(BM_BufferPool *const bm) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   Node *tmp = pmi->head;
@@ -266,6 +280,7 @@ RC shutdownBufferPool(BM_BufferPool *const bm) {
 }
 
 
+// writting all dirty pages back to file
 RC forceFlushPool(BM_BufferPool *const bm) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   Node *tmp = pmi->head;
@@ -284,6 +299,7 @@ RC forceFlushPool(BM_BufferPool *const bm) {
 }
 
 
+// pin a page and return a pointer to it's data and page number
 RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber pageNum) {
   PageFrameInfo *frame = getFrameByPageNumber(bm, pageNum);
   if (frame == NULL) {
@@ -301,6 +317,7 @@ RC pinPage(BM_BufferPool *const bm, BM_PageHandle *const page, const PageNumber 
 }
 
 
+// release the page
 RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
   PageFrameInfo *frame = getFrameByPageNumber(bm, page->pageNum);
   if (frame == NULL) {
@@ -311,6 +328,7 @@ RC unpinPage(BM_BufferPool *const bm, BM_PageHandle *const page) {
 }
 
 
+// mark a page as dirty to be written back to disk eventually
 RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page) {
   PageFrameInfo *frame = getFrameByPageNumber(bm, page->pageNum);
   if (frame == NULL) {
@@ -321,6 +339,7 @@ RC markDirty(BM_BufferPool *const bm, BM_PageHandle *const page) {
 }
 
 
+// force write single page to disk
 RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
   PageFrameInfo *frame = getFrameByPageNumber(bm, page->pageNum);
   if (frame == NULL) {
@@ -340,30 +359,35 @@ RC forcePage(BM_BufferPool *const bm, BM_PageHandle *const page) {
 }
 
 
+// return array of the current page numbers
 PageNumber *getFrameContents (BM_BufferPool *const bm) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   return pmi->statistics->pageNumbers;
 }
 
 
+// return dirty flags for all the currently loaded pages
 bool *getDirtyFlags (BM_BufferPool *const bm) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   return pmi->statistics->dirtyFlags;
 }
 
 
+// return fix count for each page currently loaded
 int *getFixCounts (BM_BufferPool *const bm) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   return pmi->statistics->fixCounts;
 }
 
 
+// return read disk IO count since the time the pool was initialized
 int getNumReadIO (BM_BufferPool *const bm) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   return pmi->statistics->readIO;
 }
 
 
+// return write disk IO count since the time the pool was initialized
 int getNumWriteIO (BM_BufferPool *const bm) {
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   return pmi->statistics->writeIO;

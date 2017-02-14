@@ -13,6 +13,7 @@ HM *hmInit() {
 }
 
 
+// hash function, inspired by djb2 algorithm
 int hash(int key) {
   unsigned h = 31;
   h = (h * HASH_LEN) ^ (key * HASH_LEN);
@@ -20,6 +21,7 @@ int hash(int key) {
 }
 
 
+// making key value pairs
 HM_Comb *getComb(HM *hm, int key) {
   int indx = hash(key);
   Node *head = hm->tbl[indx];
@@ -36,6 +38,8 @@ HM_Comb *getComb(HM *hm, int key) {
   }
 }
 
+
+// insert a pointer to any type of value to the hash map
 int hmInsert(HM *hm, int key, void *val) {
   HM_Comb *comb = getComb(hm, key);
   if (comb != NULL) {
@@ -65,6 +69,7 @@ int hmInsert(HM *hm, int key, void *val) {
 }
 
 
+// get value by key from hashmap
 void *hmGet(HM *hm, int key) {
   HM_Comb *comb = getComb(hm, key);
   if (comb == NULL) {
@@ -74,6 +79,7 @@ void *hmGet(HM *hm, int key) {
 }
 
 
+// delete a key, value pair from the hashmap
 int hmDelete(HM *hm, int key) {
   int indx = hash(key);
   Node *head = hm->tbl[indx];
@@ -100,6 +106,7 @@ int hmDelete(HM *hm, int key) {
 }
 
 
+// delete all nodes of hashmap and release resources
 void hmDestroy(HM *hm) {
   Node *deletable = NULL;
   int i;
