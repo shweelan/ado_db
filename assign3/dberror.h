@@ -2,9 +2,18 @@
 #define DBERROR_H
 
 #include "stdio.h"
+#include <errno.h>
 
+/*
+  choosing 8192 as block size, because most of the operating systems are implementing blocks of size of power of 2, mostly 4096 or 8192
+  reading smaller or larger that are not power of 2 blocks will waste bytes already feched by the file system
+*/
 /* module wide constants */
-#define PAGE_SIZE 4096
+#define PAGE_SIZE 8192
+
+/* DB path configuration */
+#define PATH_DIR "/tmp/database_ado/"
+#define DEFAULT_MODE 0777
 
 /* return code definitions */
 typedef int RC;
@@ -14,6 +23,14 @@ typedef int RC;
 #define RC_FILE_HANDLE_NOT_INIT 2
 #define RC_WRITE_FAILED 3
 #define RC_READ_NON_EXISTING_PAGE 4
+#define RC_BLOCK_POSITION_ERROR 5
+#define RC_FS_ERROR 6
+#define RC_FILE_ALREADY_EXISTS 7
+
+#define RC_NO_SPACE_IN_POOL 100
+#define RC_STRATEGY_NOT_SUPPORTED 101
+#define RC_ERROR_NO_PAGE 102
+#define RC_ERROR_NOT_FREE_FRAME 103
 
 #define RC_RM_COMPARE_VALUE_OF_DIFFERENT_DATATYPE 200
 #define RC_RM_EXPR_RESULT_IS_NOT_BOOLEAN 201
@@ -26,6 +43,8 @@ typedef int RC;
 #define RC_IM_KEY_ALREADY_EXISTS 301
 #define RC_IM_N_TO_LAGE 302
 #define RC_IM_NO_MORE_ENTRIES 303
+
+#define RC_GENERAL_ERROR 500
 
 /* holder for error messages */
 extern char *RC_message;
@@ -53,5 +72,6 @@ extern char *errorMessage (RC error);
       }									\
   } while(0);
 
+void throwError();
 
 #endif

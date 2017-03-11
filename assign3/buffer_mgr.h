@@ -3,6 +3,8 @@
 
 // Include return codes and methods for logging errors
 #include "dberror.h"
+#include "data_structures.h"
+#include "storage_mgr.h"
 
 // Include bool DT
 #include "dt.h"
@@ -20,13 +22,42 @@ typedef enum ReplacementStrategy {
 typedef int PageNumber;
 #define NO_PAGE -1
 
+typedef struct Statistics {
+  int *pageNumbers;
+  int *fixCounts;
+  bool *dirtyFlags;
+  int readIO; // disk read count
+  int writeIO; // disk write count
+
+} Statistics;
+
+typedef struct PoolMgmtInfo {
+  HM *hm; // hashmap for direct access
+
+  // head and tail for linked list
+  Node *head;
+  Node *tail;
+
+  Statistics *statistics;
+
+  SM_FileHandle *fHandle;
+} PoolMgmtInfo;
+
 typedef struct BM_BufferPool {
   char *pageFile;
   int numPages;
   ReplacementStrategy strategy;
-  void *mgmtData; // use this one to store the bookkeeping info your buffer 
+  void *mgmtData; // use this one to store the bookkeeping info your buffer
                   // manager needs for a buffer pool
 } BM_BufferPool;
+
+typedef struct PageFrameInfo {
+  int statisticsPosition;
+  PageNumber pageNum;
+  int fixCount;
+  bool dirty;
+  char *pageData;
+} PageFrameInfo;
 
 typedef struct BM_PageHandle {
   PageNumber pageNum;
@@ -41,8 +72,8 @@ typedef struct BM_PageHandle {
   ((BM_PageHandle *) malloc (sizeof(BM_PageHandle)))
 
 // Buffer Manager Interface Pool Handling
-RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName, 
-		  const int numPages, ReplacementStrategy strategy, 
+RC initBufferPool(BM_BufferPool *const bm, const char *const pageFileName,
+		  const int numPages, ReplacementStrategy strategy,
 		  void *stratData);
 RC shutdownBufferPool(BM_BufferPool *const bm);
 RC forceFlushPool(BM_BufferPool *const bm);
@@ -51,7 +82,7 @@ RC forceFlushPool(BM_BufferPool *const bm);
 RC markDirty (BM_BufferPool *const bm, BM_PageHandle *const page);
 RC unpinPage (BM_BufferPool *const bm, BM_PageHandle *const page);
 RC forcePage (BM_BufferPool *const bm, BM_PageHandle *const page);
-RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page, 
+RC pinPage (BM_BufferPool *const bm, BM_PageHandle *const page,
 	    const PageNumber pageNum);
 
 // Statistics Interface

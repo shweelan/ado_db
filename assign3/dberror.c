@@ -7,7 +7,7 @@
 char *RC_message;
 
 /* print a message to standard out describing the error */
-void 
+void
 printError (RC error)
 {
   if (RC_message != NULL)
@@ -33,4 +33,10 @@ errorMessage (RC error)
     }
 
   return message;
+}
+
+
+void throwError() {
+  printf("OOPS!! Something went wrong with file system, (%s).\n", strerror(errno));
+  exit(EXIT_FAILURE);
 }
