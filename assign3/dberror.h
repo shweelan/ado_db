@@ -11,6 +11,9 @@
 /* module wide constants */
 #define PAGE_SIZE 8192
 
+// Schema Stringify delimiter
+#define DELIMITER ((char *) ",")
+
 /* DB path configuration */
 #define PATH_DIR "/tmp/database_ado/"
 #define DEFAULT_MODE 0777
