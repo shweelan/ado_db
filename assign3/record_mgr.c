@@ -22,9 +22,9 @@ void freeSchemaObjects(int numAttr, char **attrNames, DataType *dataTypes, int *
 
 
 char * stringifySchema(Schema *schema) {
-  char *string = (char *) malloc(sizeof(char) * PAGE_SIZE); // TODO free it[count]
+  char *string = (char *) malloc(sizeof(char) * PAGE_SIZE); // TODO free it[count, multiple maybe]
   char intString[9];
-  char *format = "%08x";
+  char *format = "%08x"; // TODO make sure if use 16bitint or 32bitint // TODO better solution than hex, asci maybe
   sprintf(&intString[0], format, schema->numAttr);
   strcat(string, intString);
   strcat(string, DELIMITER);
@@ -58,13 +58,13 @@ Schema * parseSchema(char *string) {
   char *token; // TODO check memory leakage
   token = strtok(string, DELIMITER);
   int numAttr = (int) strtol(token, NULL, 16);
-  char **attrNames = (char **) malloc(sizeof(char *) * numAttr); // TODO free it, Done at the end
-  DataType *dataTypes = (DataType *) malloc(sizeof(DataType) * numAttr); // TODO free it, Done at the end
-  int *typeLength = (int *) malloc(sizeof(int) * numAttr); // TODO free it, Done at the end
+  char **attrNames = (char **) malloc(sizeof(char *) * numAttr); // TODO free it, Done in freeSchemaObjects
+  DataType *dataTypes = (DataType *) malloc(sizeof(DataType) * numAttr); // TODO free it, Done in freeSchemaObjects
+  int *typeLength = (int *) malloc(sizeof(int) * numAttr); // TODO free it, Done in freeSchemaObjects
   int i;
   for (i = 0; i < numAttr; i++) {
     token = strtok(NULL, DELIMITER);
-    attrNames[i] = (char *) malloc(sizeof(char) * (strlen(token) + 1)); // +1 for \0 terminator // TODO free it, Done at the end
+    attrNames[i] = (char *) malloc(sizeof(char) * (strlen(token) + 1)); // +1 for \0 terminator // TODO free it, Done in freeSchemaObjects
     strcpy(attrNames[i], token);
 
     token = strtok(NULL, DELIMITER);
@@ -75,7 +75,7 @@ Schema * parseSchema(char *string) {
   }
   token = strtok(NULL, DELIMITER);
   int keySize = (int) strtol(token, NULL, 16);
-  int *keyAttrs = (int *) malloc(sizeof(int) * keySize); // TODO free it, Done in freeSchema
+  int *keyAttrs = (int *) malloc(sizeof(int) * keySize); // TODO free it, Done in freeSchemaObjects
   for (i = 0; i < keySize; i++) {
     token = strtok(NULL, DELIMITER);
     keyAttrs[i] = (int) strtol(token, NULL, 16);
@@ -125,7 +125,7 @@ RC createTable (char *name, Schema *schema) {
     return err; // TODO THROW maybe because nothing can be dont after this point
   }
 
-  // No need to ensureCapacity, because creating a file already ensures one block.
+  // No need to ensureCapacity, because creating a file already ensures one block, we dont need more for now.
   // TODO check if schemaString is less than pageSize, else (find a new solution)
   char *schemaString = stringifySchema(schema);
   SM_FileHandle fileHandle;
@@ -133,8 +133,10 @@ RC createTable (char *name, Schema *schema) {
     return err;
   }
   if ((err = writeBlock(0, &fileHandle, schemaString))) {
+    free(schemaString);
     return err;
   }
+  free(schemaString);
   if ((err = closePageFile(&fileHandle))) {
     return err;
   }
@@ -176,6 +178,27 @@ RC freeSchema (Schema *schema) {
 }
 
 
+int getRecordSize (Schema *schema) {
+  int size = 0;
+  int i;
+  for (i = 0; i < schema->numAttr; i++) {
+    switch (schema->dataTypes[i]) {
+      case DT_INT:
+      case DT_FLOAT:
+        size += 4;
+        break;
+      case DT_STRING:
+        size += schema->typeLength[i];
+        break;
+      case DT_BOOL:
+        size++;
+        break;
+    }
+  }
+  return size;
+}
+
+
 int main(int argc, char *argv[]) {
   int a = 4;
   char **b = (char **) malloc(sizeof(char *) * a);
@@ -199,12 +222,14 @@ int main(int argc, char *argv[]) {
   printf("first schema : ");
   printSchema(s);
   char *ss = stringifySchema(s);
-  printf("first schema string : %s\n\n", ss);
+  printf("first schema string : %s\n", ss);
+  printf("first schema record size : %d\n\n", getRecordSize(s));
   Schema *ns = parseSchema(ss);
   printf("second schema : ");
   printSchema(ns);
   char *nss = stringifySchema(ns);
-  printf("second schema string : %s\n\n", nss);
+  printf("second schema string : %s\n", nss);
+  printf("second schema record size : %d\n\n", getRecordSize(ns));
   printf("\n");
   freeSchema(s);
   freeSchema(ns);
