@@ -94,7 +94,7 @@ void printSchema(Schema *schema) {
     del = (i < schema->numAttr - 1) ? ',' : ' ';
     printf("\t\t[%s,%d,%d]%c\n", schema->attrNames[i], (int) schema->dataTypes[i], schema->typeLength[i], del);
   }
-  printf("\t],\n\tkeySize : %d,\n\t : [\n", schema->keySize);
+  printf("\t],\n\tkeySize : %d,\n\tkeyAttrs : [\n", schema->keySize);
   for (i = 0; i < schema->keySize; i++) {
     del = (i < schema->keySize - 1) ? ',' : ' ';
     printf("\t\t%d%c\n", schema->keyAttrs[i], del);
