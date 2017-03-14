@@ -9,6 +9,18 @@
 
 // helpers
 
+void freeSchemaObjects(int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int *keyAttrs) {
+  int i;
+  for (i = 0; i < numAttr; i++) {
+    free(attrNames[i]);
+  }
+  free(attrNames);
+  free(dataTypes);
+  free(typeLength);
+  free(keyAttrs);
+}
+
+
 char * stringifySchema(Schema *schema) {
   char *string = (char *) malloc(sizeof(char) * PAGE_SIZE); // TODO free it[count]
   char intString[9];
@@ -46,13 +58,13 @@ Schema * parseSchema(char *string) {
   char *token; // TODO check memory leakage
   token = strtok(string, DELIMITER);
   int numAttr = (int) strtol(token, NULL, 16);
-  char **attrNames = (char **) malloc(sizeof(char *) * numAttr); // TODO free it, Done in freeSchema
-  DataType *dataTypes = (DataType *) malloc(sizeof(DataType) * numAttr); // TODO free it, Done in freeSchema
-  int *typeLength = (int *) malloc(sizeof(int) * numAttr); // TODO free it, Done in freeSchema
+  char **attrNames = (char **) malloc(sizeof(char *) * numAttr); // TODO free it, Done at the end
+  DataType *dataTypes = (DataType *) malloc(sizeof(DataType) * numAttr); // TODO free it, Done at the end
+  int *typeLength = (int *) malloc(sizeof(int) * numAttr); // TODO free it, Done at the end
   int i;
   for (i = 0; i < numAttr; i++) {
     token = strtok(NULL, DELIMITER);
-    attrNames[i] = (char *) malloc(sizeof(char) * (strlen(token) + 1)); // +1 for \0 terminator // TODO free it, Done in freeSchema
+    attrNames[i] = (char *) malloc(sizeof(char) * (strlen(token) + 1)); // +1 for \0 terminator // TODO free it, Done at the end
     strcpy(attrNames[i], token);
 
     token = strtok(NULL, DELIMITER);
@@ -68,7 +80,9 @@ Schema * parseSchema(char *string) {
     token = strtok(NULL, DELIMITER);
     keyAttrs[i] = (int) strtol(token, NULL, 16);
   }
-  return createSchema(numAttr, attrNames, dataTypes, typeLength, keySize, keyAttrs);
+  Schema *s = createSchema(numAttr, attrNames, dataTypes, typeLength, keySize, keyAttrs);
+  freeSchemaObjects(numAttr, attrNames, dataTypes, typeLength, keyAttrs);
+  return s;
 }
 
 
@@ -87,6 +101,7 @@ void printSchema(Schema *schema) {
   }
   printf("\t]\n}\n\n");
 }
+
 
 //functionality
 
@@ -135,24 +150,27 @@ RC openTable (RM_TableData *rel, char *name) {
 Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int keySize, int *keys) {
   Schema *schema = (Schema *) malloc(sizeof(Schema)); // TODO free it, Done in freeSchema
   schema->numAttr = numAttr;
-  schema->attrNames = attrNames;
-  schema->dataTypes = dataTypes;
-  schema->typeLength = typeLength;
+  schema->attrNames = (char **) malloc(sizeof(char *) * numAttr); // TODO free it, Done in freeSchema
+  schema->dataTypes = (DataType *) malloc(sizeof(int) * numAttr); // TODO free it, Done in freeSchema
+  schema->typeLength = (int *) malloc(sizeof(int) * numAttr); // TODO free it, Done in freeSchema
+  int i;
+  for (i = 0; i < numAttr; i++) {
+    schema->attrNames[i] = (char *) malloc(sizeof(char) * (strlen(attrNames[i]) + 1)); // +1 for \0 terminator // TODO free it, Done in freeSchema
+    strcpy(schema->attrNames[i], attrNames[i]);
+    schema->dataTypes[i] = dataTypes[i];
+    schema->typeLength[i] = typeLength[i];
+  }
   schema->keySize = keySize;
-  schema->keyAttrs = keys;
+  schema->keyAttrs = (int *) malloc(sizeof(int) * keySize); // TODO free it, Done in freeSchema
+  for (i = 0; i < keySize; i++) {
+    schema->keyAttrs[i] = keys[i];
+  }
   return schema;
 }
 
 
 RC freeSchema (Schema *schema) {
-  int i;
-  for (i = 0; i < schema->numAttr; i++) {
-    free(schema->attrNames[i]);
-  }
-  free(schema->attrNames);
-  free(schema->dataTypes);
-  free(schema->typeLength);
-  free(schema->keyAttrs);
+  freeSchemaObjects(schema->numAttr, schema->attrNames, schema->dataTypes, schema->typeLength, schema->keyAttrs);
   free(schema);
   return RC_OK;
 }
@@ -161,14 +179,10 @@ RC freeSchema (Schema *schema) {
 int main(int argc, char *argv[]) {
   int a = 4;
   char **b = (char **) malloc(sizeof(char *) * a);
-  b[0] = (char *) malloc(sizeof(char) * 2);
-  strcpy(b[0], "SH");
-  b[1] = (char *) malloc(sizeof(char) * 2);
-  strcpy(b[1] , "WE");
-  b[2] = (char *) malloc(sizeof(char) * 2);
-  strcpy(b[2] , "EL");
-  b[3] = (char *) malloc(sizeof(char) * 2);
-  strcpy(b[3] , "AN");
+  b[0] = "SH";
+  b[1] = "WE";
+  b[2] = "EL";
+  b[3] = "AN";
   DataType *c = (DataType *) malloc(sizeof(DataType) * a);
   c[0] = c[1] = c[2] = c[3] = 1;
   int *d = (int *) malloc(sizeof(int) * a);
@@ -196,5 +210,9 @@ int main(int argc, char *argv[]) {
   freeSchema(ns);
   free(ss);
   free(nss);
+  free(b);
+  free(c);
+  free(d);
+  free(f);
   return 0;
 }
