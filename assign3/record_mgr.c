@@ -88,7 +88,7 @@ Schema * parseSchema(char *string) {
 
 void printSchema(Schema *schema) {
   char del = ',';
-  printf("{\nnumAttr : %d,\n\tattrs : [\n", schema->numAttr);
+  printf("{\n\tnumAttr : %d,\n\tattrs : [\n", schema->numAttr);
   int i;
   for (i = 0; i < schema->numAttr; i++) {
     del = (i < schema->numAttr - 1) ? ',' : ' ';
