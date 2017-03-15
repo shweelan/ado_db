@@ -59,6 +59,15 @@ extern char *RC_message;
 extern void printError (RC error);
 extern char *errorMessage (RC error);
 
+
+#define newArray(type, size) (type *) malloc(sizeof(type) * size)
+#define new(type) newArray(type, 1)
+#define newStr(size) newArray(char, size + 1) // +1 for \0 terminator
+#define newIntArr(size) newArray(int, size)
+#define newFloatArr(size) newArray(float, size)
+#define newCharArr(size) newArray(char, size)
+
+
 #define THROW(rc,message) \
   do {			  \
     RC_message=message;	  \

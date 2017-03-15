@@ -9,8 +9,9 @@
 
 // helpers
 
+
 char *copyString(char *_string) {
-  char *string = (char *) malloc(sizeof(char) * strlen(_string) + 1); // +1 for \0 terminator // TODO free it[count, multiple maybe]
+  char *string = newStr(strlen(_string)); // TODO free it[count, multiple maybe]
   strcpy(string, _string);
   return string;
 }
@@ -29,7 +30,7 @@ void freeSchemaObjects(int numAttr, char **attrNames, DataType *dataTypes, int *
 
 
 char * stringifySchema(Schema *schema) {
-  char *string = (char *) malloc(sizeof(char) * PAGE_SIZE); // TODO free it[count, multiple maybe]
+  char *string = newCharArr(PAGE_SIZE); // TODO free it[count, multiple maybe]
   char intString[9];
   char *format = "%08x";
   sprintf(&intString[0], format, schema->numAttr);
@@ -63,12 +64,12 @@ char * stringifySchema(Schema *schema) {
 
 Schema * parseSchema(char *_string) {
   char *string = copyString(_string); // TODO free it, Done below
-  char *token; // TODO check memory leakage
+  char *token;
   token = strtok(string, DELIMITER);
   int numAttr = (int) strtol(token, NULL, 16);
-  char **attrNames = (char **) malloc(sizeof(char *) * numAttr); // TODO free it, Done in freeSchemaObjects
-  DataType *dataTypes = (DataType *) malloc(sizeof(DataType) * numAttr); // TODO free it, Done in freeSchemaObjects
-  int *typeLength = (int *) malloc(sizeof(int) * numAttr); // TODO free it, Done in freeSchemaObjects
+  char **attrNames = newArray(char *, numAttr); // TODO free it, Done in freeSchemaObjects
+  DataType *dataTypes = newArray(DataType, numAttr); // TODO free it, Done in freeSchemaObjects
+  int *typeLength = newIntArr(numAttr); // TODO free it, Done in freeSchemaObjects
   int i;
   for (i = 0; i < numAttr; i++) {
     token = strtok(NULL, DELIMITER);
@@ -82,7 +83,7 @@ Schema * parseSchema(char *_string) {
   }
   token = strtok(NULL, DELIMITER);
   int keySize = (int) strtol(token, NULL, 16);
-  int *keyAttrs = (int *) malloc(sizeof(int) * keySize); // TODO free it, Done in freeSchemaObjects
+  int *keyAttrs = newIntArr(keySize); // TODO free it, Done in freeSchemaObjects
   for (i = 0; i < keySize; i++) {
     token = strtok(NULL, DELIMITER);
     keyAttrs[i] = (int) strtol(token, NULL, 16);
@@ -157,9 +158,9 @@ RC createTable (char *name, Schema *schema) {
 RC openTable (RM_TableData *rel, char *name) {
   // TODO checl all errors and free resources on error or throw it. // TODO downcase name
   RC err;
-  BM_BufferPool *bm = (BM_BufferPool *) malloc (sizeof(BM_BufferPool)); // TODO free it
-  BM_PageHandle *pageHandle = (BM_PageHandle *) malloc (sizeof(BM_PageHandle)); // TODO free it, Done below
-  if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_FIFO, NULL))) {
+  BM_BufferPool *bm = new(BM_BufferPool); // TODO free it
+  BM_PageHandle *pageHandle = new(BM_PageHandle); // TODO free it, Done below
+  if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_LRU, NULL))) {
     return err;
   }
   if ((err = pinPage(bm, pageHandle, 0))) {
@@ -194,11 +195,11 @@ RC closeTable (RM_TableData *rel) {
 
 
 Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int keySize, int *keys) {
-  Schema *schema = (Schema *) malloc(sizeof(Schema)); // TODO free it, Done in freeSchema
+  Schema *schema = new(Schema); // TODO free it, Done in freeSchema
   schema->numAttr = numAttr;
-  schema->attrNames = (char **) malloc(sizeof(char *) * numAttr); // TODO free it, Done in freeSchema
-  schema->dataTypes = (DataType *) malloc(sizeof(int) * numAttr); // TODO free it, Done in freeSchema
-  schema->typeLength = (int *) malloc(sizeof(int) * numAttr); // TODO free it, Done in freeSchema
+  schema->attrNames = newArray(char *, numAttr); // TODO free it, Done in freeSchema
+  schema->dataTypes = newArray(DataType, numAttr); // TODO free it, Done in freeSchema
+  schema->typeLength = newIntArr(numAttr); // TODO free it, Done in freeSchema
   int i;
   for (i = 0; i < numAttr; i++) {
     schema->attrNames[i] = copyString(attrNames[i]); // TODO free it, Done in freeSchema
@@ -206,7 +207,7 @@ Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *t
     schema->typeLength[i] = typeLength[i];
   }
   schema->keySize = keySize;
-  schema->keyAttrs = (int *) malloc(sizeof(int) * keySize); // TODO free it, Done in freeSchema
+  schema->keyAttrs = newIntArr(keySize); // TODO free it, Done in freeSchema
   for (i = 0; i < keySize; i++) {
     schema->keyAttrs[i] = keys[i];
   }
@@ -253,27 +254,27 @@ RC deleteTable (char *name) {
 
 int main(int argc, char *argv[]) {
   int a = 4;
-  char **b = (char **) malloc(sizeof(char *) * a);
+  char **b = newArray(char *, a);
   b[0] = "SH";
   b[1] = "WE";
   b[2] = "EL";
   b[3] = "AN";
-  DataType *c = (DataType *) malloc(sizeof(DataType) * a);
+  DataType *c = newArray(DataType, a);
   c[0] = c[1] = c[2] = c[3] = 1;
-  int *d = (int *) malloc(sizeof(int) * a);
+  int *d = newIntArr(a);
   d[0] = 10;
   d[1] = 30;
   d[2] = 20;
   d[3] = 5;
   int e = 2;
-  int *f = (int *) malloc(sizeof(int) * e);
+  int *f = newIntArr(e);
   f[0] = 1;
   f[1] = 3;
   printf("\n\n");
   Schema *s = createSchema(a, b, c, d, e, f);
   initRecordManager(NULL);
   createTable("shweelan", s);
-  RM_TableData *rel = (RM_TableData *) malloc(sizeof(RM_TableData));
+  RM_TableData *rel = new(RM_TableData);
   openTable(rel, "shweelan");
   closeTable(rel);
   deleteTable("shweelan");
