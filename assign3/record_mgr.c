@@ -153,7 +153,7 @@ RC openTable (RM_TableData *rel, char *name) {
   // TODO checl all errors and free resources on error or throw it. // TODO downcase name
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) malloc (sizeof(BM_BufferPool)); // TODO free it
-  BM_PageHandle *pageHandle = (BM_PageHandle *) malloc (sizeof(BM_PageHandle)); // TODO free it
+  BM_PageHandle *pageHandle = (BM_PageHandle *) malloc (sizeof(BM_PageHandle)); // TODO free it, Done below
   if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_FIFO, NULL))) {
     return err;
   }
@@ -161,15 +161,30 @@ RC openTable (RM_TableData *rel, char *name) {
     return err;
   }
   Schema *schema = parseSchema(pageHandle->data);
-  rel->name = name;
+  rel->name = (char*) malloc(sizeof(char) * (strlen(name) + 1)); // +1 for \0 terminator // TODO free it
+  strcpy(rel->name, name);
   rel->schema = schema;
   rel->mgmtData = bm;
   if ((err = unpinPage(bm, pageHandle))) {
     return err;
   }
-  free(pageHandle->data);
   free(pageHandle);
   printSchema(rel->schema);
+  return RC_OK;
+}
+
+
+RC closeTable (RM_TableData *rel) {
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+	RC err;
+  if ((err = shutdownBufferPool(bm))) {
+    return err;
+  }
+  free(rel->name);
+  if ((err = freeSchema(rel->schema))) {
+    return err;
+  }
+  free(rel->mgmtData);
   return RC_OK;
 }
 
@@ -250,6 +265,7 @@ int main(int argc, char *argv[]) {
   createTable("shweelan", s);
   RM_TableData *rel = (RM_TableData *) malloc(sizeof(RM_TableData));
   openTable(rel, "shweelan");
+  closeTable(rel);
   printf("first schema : ");
   printSchema(s);
   char *ss = stringifySchema(s);
