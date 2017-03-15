@@ -244,6 +244,13 @@ int getRecordSize (Schema *schema) {
 }
 
 
+RC deleteTable (char *name) {
+  RC err = destroyPageFile(name);
+  // TODO more descriptive error
+  return err;
+}
+
+
 int main(int argc, char *argv[]) {
   int a = 4;
   char **b = (char **) malloc(sizeof(char *) * a);
@@ -269,6 +276,7 @@ int main(int argc, char *argv[]) {
   RM_TableData *rel = (RM_TableData *) malloc(sizeof(RM_TableData));
   openTable(rel, "shweelan");
   closeTable(rel);
+  deleteTable("shweelan");
   printf("first schema : ");
   printSchema(s);
   char *ss = stringifySchema(s);
