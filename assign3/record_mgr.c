@@ -31,7 +31,7 @@ void freeSchemaObjects(int numAttr, char **attrNames, DataType *dataTypes, int *
 char * stringifySchema(Schema *schema) {
   char *string = (char *) malloc(sizeof(char) * PAGE_SIZE); // TODO free it[count, multiple maybe]
   char intString[9];
-  char *format = "%08x"; // TODO make sure if use 16bitint or 32bitint // TODO better solution than hex, asci maybe
+  char *format = "%08x";
   sprintf(&intString[0], format, schema->numAttr);
   strcat(string, intString);
   strcat(string, DELIMITER);
