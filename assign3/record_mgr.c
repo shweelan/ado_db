@@ -54,7 +54,9 @@ char * stringifySchema(Schema *schema) {
 }
 
 
-Schema * parseSchema(char *string) {
+Schema * parseSchema(char *_string) {
+  char *string = (char *) malloc(sizeof(char) * PAGE_SIZE); // TODO free it, Done below
+  strcpy(string, _string);
   char *token; // TODO check memory leakage
   token = strtok(string, DELIMITER);
   int numAttr = (int) strtol(token, NULL, 16);
@@ -82,6 +84,7 @@ Schema * parseSchema(char *string) {
   }
   Schema *s = createSchema(numAttr, attrNames, dataTypes, typeLength, keySize, keyAttrs);
   freeSchemaObjects(numAttr, attrNames, dataTypes, typeLength, keyAttrs);
+  free(string);
   return s;
 }
 
@@ -108,6 +111,7 @@ void printSchema(Schema *schema) {
 
 RC initRecordManager (void *mgmtData) {
   // TODO
+  initStorageManager();
   return RC_OK;
 }
 
@@ -119,7 +123,7 @@ RC shutdownRecordManager () {
 
 
 RC createTable (char *name, Schema *schema) {
-  // TODO check if not already exists.
+  // TODO check if not already exists. // TODO downcase the name
   RC err;
   if ((err = createPageFile(name))) {
     return err; // TODO THROW maybe because nothing can be dont after this point
@@ -140,11 +144,32 @@ RC createTable (char *name, Schema *schema) {
   if ((err = closePageFile(&fileHandle))) {
     return err;
   }
+  printSchema(schema);
   return RC_OK;
 }
 
 
 RC openTable (RM_TableData *rel, char *name) {
+  // TODO checl all errors and free resources on error or throw it. // TODO downcase name
+  RC err;
+  BM_BufferPool *bm = (BM_BufferPool *) malloc (sizeof(BM_BufferPool)); // TODO free it
+  BM_PageHandle *pageHandle = (BM_PageHandle *) malloc (sizeof(BM_PageHandle)); // TODO free it
+  if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_FIFO, NULL))) {
+    return err;
+  }
+  if ((err = pinPage(bm, pageHandle, 0))) {
+    return err;
+  }
+  Schema *schema = parseSchema(pageHandle->data);
+  rel->name = name;
+  rel->schema = schema;
+  rel->mgmtData = bm;
+  if ((err = unpinPage(bm, pageHandle))) {
+    return err;
+  }
+  free(pageHandle->data);
+  free(pageHandle);
+  printSchema(rel->schema);
   return RC_OK;
 }
 
@@ -221,6 +246,10 @@ int main(int argc, char *argv[]) {
   f[1] = 3;
   printf("\n\n");
   Schema *s = createSchema(a, b, c, d, e, f);
+  initRecordManager(NULL);
+  createTable("shweelan", s);
+  RM_TableData *rel = (RM_TableData *) malloc(sizeof(RM_TableData));
+  openTable(rel, "shweelan");
   printf("first schema : ");
   printSchema(s);
   char *ss = stringifySchema(s);

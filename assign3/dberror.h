@@ -14,6 +14,9 @@
 /* Schema Stringify delimiter */
 #define DELIMITER ((char *) ",")
 
+/* Per table buffer size */
+#define PER_TBL_BUF_SIZE 10
+
 /* DB path configuration */
 #define PATH_DIR "/tmp/database_ado/"
 #define DEFAULT_MODE 0777
