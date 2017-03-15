@@ -9,6 +9,13 @@
 
 // helpers
 
+char *copyString(char *_string) {
+  char *string = (char *) malloc(sizeof(char) * strlen(_string) + 1); // +1 for \0 terminator // TODO free it[count, multiple maybe]
+  strcpy(string, _string);
+  return string;
+}
+
+
 void freeSchemaObjects(int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int *keyAttrs) {
   int i;
   for (i = 0; i < numAttr; i++) {
@@ -55,8 +62,7 @@ char * stringifySchema(Schema *schema) {
 
 
 Schema * parseSchema(char *_string) {
-  char *string = (char *) malloc(sizeof(char) * PAGE_SIZE); // TODO free it, Done below
-  strcpy(string, _string);
+  char *string = copyString(_string); // TODO free it, Done below
   char *token; // TODO check memory leakage
   token = strtok(string, DELIMITER);
   int numAttr = (int) strtol(token, NULL, 16);
@@ -66,8 +72,7 @@ Schema * parseSchema(char *_string) {
   int i;
   for (i = 0; i < numAttr; i++) {
     token = strtok(NULL, DELIMITER);
-    attrNames[i] = (char *) malloc(sizeof(char) * (strlen(token) + 1)); // +1 for \0 terminator // TODO free it, Done in freeSchemaObjects
-    strcpy(attrNames[i], token);
+    attrNames[i] = copyString(token); // TODO free it, Done in freeSchemaObjects
 
     token = strtok(NULL, DELIMITER);
     dataTypes[i] = (DataType) strtol(token, NULL, 16);
@@ -161,8 +166,7 @@ RC openTable (RM_TableData *rel, char *name) {
     return err;
   }
   Schema *schema = parseSchema(pageHandle->data);
-  rel->name = (char*) malloc(sizeof(char) * (strlen(name) + 1)); // +1 for \0 terminator // TODO free it
-  strcpy(rel->name, name);
+  rel->name = copyString(name); // TODO free it, Done in closeTable
   rel->schema = schema;
   rel->mgmtData = bm;
   if ((err = unpinPage(bm, pageHandle))) {
@@ -197,8 +201,7 @@ Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *t
   schema->typeLength = (int *) malloc(sizeof(int) * numAttr); // TODO free it, Done in freeSchema
   int i;
   for (i = 0; i < numAttr; i++) {
-    schema->attrNames[i] = (char *) malloc(sizeof(char) * (strlen(attrNames[i]) + 1)); // +1 for \0 terminator // TODO free it, Done in freeSchema
-    strcpy(schema->attrNames[i], attrNames[i]);
+    schema->attrNames[i] = copyString(attrNames[i]); // TODO free it, Done in freeSchema
     schema->dataTypes[i] = dataTypes[i];
     schema->typeLength[i] = typeLength[i];
   }
