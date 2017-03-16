@@ -44,6 +44,7 @@ typedef int RC;
 #define RC_RM_NO_MORE_TUPLES 203
 #define RC_RM_NO_PRINT_FOR_DATATYPE 204
 #define RC_RM_UNKOWN_DATATYPE 205
+#define RC_RM_LIMIT_EXCEEDED 210
 
 #define RC_IM_KEY_NOT_FOUND 300
 #define RC_IM_KEY_ALREADY_EXISTS 301
@@ -61,8 +62,9 @@ extern char *errorMessage (RC error);
 
 
 #define newArray(type, size) (type *) malloc(sizeof(type) * size)
+#define newCleanArray(type, size) (type *) calloc(size, sizeof(type))
 #define new(type) newArray(type, 1)
-#define newStr(size) newArray(char, size + 1) // +1 for \0 terminator
+#define newStr(size) newCleanArray(char, size + 1) // +1 for \0 terminator
 #define newIntArr(size) newArray(int, size)
 #define newFloatArr(size) newArray(float, size)
 #define newCharArr(size) newArray(char, size)

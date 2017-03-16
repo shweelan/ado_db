@@ -5,6 +5,8 @@
 #include "tables.h"
 #include <string.h>
 #include <stdlib.h>
+#include <limits.h>
+#include <float.h>
 
 
 // helpers
@@ -30,7 +32,8 @@ void freeSchemaObjects(int numAttr, char **attrNames, DataType *dataTypes, int *
 
 
 char * stringifySchema(Schema *schema) {
-  char *string = newCharArr(PAGE_SIZE); // TODO free it[count, multiple maybe]
+  // TODO schema should not go above PAGE_SIZE - 1(\0 terminator)
+  char *string = newStr(PAGE_SIZE - 1); // -1 because newStr adds 1 byte for \0 terminator // TODO free it[count, multiple maybe]
   char intString[9];
   char *format = "%08x";
   sprintf(&intString[0], format, schema->numAttr);
@@ -95,8 +98,31 @@ Schema * parseSchema(char *_string) {
 }
 
 
+int getAttrStartingPosition(Schema *schema, int attrNum) {
+  int position = 0;
+  int i;
+  for (i = 0; i < attrNum; i++) {
+    switch (schema->dataTypes[i]) {
+      case DT_INT:
+        position += sizeof(int);
+        break;
+      case DT_FLOAT:
+        position += sizeof(float);
+        break;
+      case DT_STRING:
+        position += schema->typeLength[i] + 1; // +1 for \0 terminator
+        break;
+      case DT_BOOL:
+        position += sizeof(bool);
+        break;
+    }
+  }
+  return position;
+}
+
+
 void printSchema(Schema *schema) {
-  char del = ',';
+  char del;
   printf("{\n\tnumAttr : %d,\n\tattrs : [\n", schema->numAttr);
   int i;
   for (i = 0; i < schema->numAttr; i++) {
@@ -111,6 +137,68 @@ void printSchema(Schema *schema) {
   printf("\t]\n}\n\n");
 }
 
+
+void printRecord(Schema *schema, Record * record) {
+  char del;
+  Value *val;
+  int i;
+  RC err;
+  printf("\n{\n");
+  for (i = 0; i < schema->numAttr; i ++) {
+    del = (i < schema->numAttr - 1) ? ',' : ' ';
+    if ((err = getAttr(record, schema, i, &val))) {
+      // TODO throw err
+    }
+    switch (val->dt) {
+      case DT_INT:
+        printf("\t%s : %d%c\n", schema->attrNames[i], val->v.intV, del);
+        break;
+      case DT_FLOAT:
+        printf("\t%s : %g%c\n", schema->attrNames[i], val->v.floatV, del);
+        break;
+      case DT_BOOL:
+        if (val->v.boolV) {
+          printf("\t%s : true%c\n", schema->attrNames[i], del);
+        }
+        else {
+          printf("\t%s : false%c\n", schema->attrNames[i], del);
+        }
+        break;
+      case DT_STRING:
+        printf("\t%s : \"%s\"%c\n", schema->attrNames[i], val->v.stringV, del);
+        free(val->v.stringV);
+        break;
+    }
+    free(val);
+  }
+  printf("}\n\n");
+}
+
+
+int getRecordSizeInBytes(Schema *schema, bool withTerminators) {
+  int size = 0;
+  int i;
+  for (i = 0; i < schema->numAttr; i++) {
+    switch (schema->dataTypes[i]) {
+      case DT_INT:
+        size += sizeof(int);
+        break;
+      case DT_FLOAT:
+        size += sizeof(float);
+        break;
+      case DT_STRING:
+        size += schema->typeLength[i];
+        if (withTerminators) {
+          size++; // +1 for \0 terminator
+        }
+        break;
+      case DT_BOOL:
+        size += sizeof(bool);
+        break;
+    }
+  }
+  return size;
+}
 
 //functionality
 
@@ -150,7 +238,6 @@ RC createTable (char *name, Schema *schema) {
   if ((err = closePageFile(&fileHandle))) {
     return err;
   }
-  printSchema(schema);
   return RC_OK;
 }
 
@@ -174,7 +261,6 @@ RC openTable (RM_TableData *rel, char *name) {
     return err;
   }
   free(pageHandle);
-  printSchema(rel->schema);
   return RC_OK;
 }
 
@@ -201,10 +287,25 @@ Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *t
   schema->dataTypes = newArray(DataType, numAttr); // TODO free it, Done in freeSchema
   schema->typeLength = newIntArr(numAttr); // TODO free it, Done in freeSchema
   int i;
+  int len;
   for (i = 0; i < numAttr; i++) {
     schema->attrNames[i] = copyString(attrNames[i]); // TODO free it, Done in freeSchema
     schema->dataTypes[i] = dataTypes[i];
-    schema->typeLength[i] = typeLength[i];
+    switch (dataTypes[i]) {
+      case DT_INT:
+        len = sizeof(int);
+        break;
+      case DT_FLOAT:
+        len = sizeof(float);
+        break;
+      case DT_BOOL:
+        len = sizeof(bool);
+        break;
+      case DT_STRING:
+        len = typeLength[i];
+        break;
+    }
+    schema->typeLength[i] = len;
   }
   schema->keySize = keySize;
   schema->keyAttrs = newIntArr(keySize); // TODO free it, Done in freeSchema
@@ -223,25 +324,7 @@ RC freeSchema (Schema *schema) {
 
 
 int getRecordSize (Schema *schema) {
-  int size = 0;
-  int i;
-  for (i = 0; i < schema->numAttr; i++) {
-    switch (schema->dataTypes[i]) {
-      case DT_INT:
-        size += sizeof(int);
-        break;
-      case DT_FLOAT:
-        size += sizeof(float);
-        break;
-      case DT_STRING:
-        size += schema->typeLength[i];
-        break;
-      case DT_BOOL:
-        size += sizeof(bool);
-        break;
-    }
-  }
-  return size;
+  return getRecordSizeInBytes(schema, false);
 }
 
 
@@ -249,6 +332,95 @@ RC deleteTable (char *name) {
   RC err = destroyPageFile(name);
   // TODO more descriptive error
   return err;
+}
+
+
+RC createRecord (Record **record, Schema *schema) {
+  int size = getRecordSizeInBytes(schema, true);
+  Record *r = new(Record); // TODO free it, Done in freeRecord
+  r->data = newCharArr(size); // TODO free it, Done in freeRecord
+  *record = r;
+  return RC_OK;
+}
+
+
+RC freeRecord (Record *record) {
+  free(record->data);
+  free(record);
+  return RC_OK;
+}
+
+
+RC setAttr (Record *record, Schema *schema, int attrNum, Value *value) {
+  int position = getAttrStartingPosition(schema, attrNum);
+  char *ptr = record->data;
+  ptr += position;
+  int size;
+  switch(value->dt) {
+    case DT_INT:
+      if (value->v.intV > INT_MAX || value->v.intV < INT_MIN) {
+        return RC_RM_LIMIT_EXCEEDED;
+      }
+      size = sizeof(int);
+      memcpy(ptr, &value->v.intV, size);
+      break;
+    case DT_FLOAT:
+      if (value->v.floatV > FLT_MAX || value->v.floatV < FLT_MIN) {
+        return RC_RM_LIMIT_EXCEEDED;
+      }
+      size = sizeof(float);
+      memcpy(ptr, &value->v.floatV, size);
+      break;
+    case DT_STRING:
+      if (strlen(value->v.stringV) > schema->typeLength[attrNum]) {
+        return RC_RM_LIMIT_EXCEEDED;
+      }
+      size = schema->typeLength[attrNum] + 1; // +1 for \0 terminator
+      memcpy(ptr, value->v.stringV, size);
+      ptr[size - 1] = '\0'; // for safety
+      break;
+    case DT_BOOL:
+      if (value->v.boolV != true && value->v.boolV != false) {
+        return RC_RM_LIMIT_EXCEEDED;
+      }
+      size = sizeof(bool);
+      memcpy(ptr, &value->v.boolV, size);
+      break;
+    default :
+      return RC_RM_UNKOWN_DATATYPE;
+  }
+  return RC_OK;
+}
+
+
+RC getAttr (Record *record, Schema *schema, int attrNum, Value **value) {
+  Value *val = new(Value); // TODO free it
+  int position = getAttrStartingPosition(schema, attrNum);
+  int size;
+  char *ptr = record->data;
+  ptr += position;
+  val->dt = schema->dataTypes[attrNum];
+  switch (schema->dataTypes[attrNum]) {
+    case DT_INT:
+      size = sizeof(int);
+      memcpy(&val->v.intV, ptr, size);
+      break;
+    case DT_FLOAT:
+      size = sizeof(float);
+      memcpy(&val->v.floatV, ptr, size);
+      break;
+    case DT_STRING:
+      size = schema->typeLength[attrNum];
+      val->v.stringV = newStr(size); // TODO free it
+      memcpy(val->v.stringV, ptr, size + 1); // +1 for \0 terminator
+      break;
+    case DT_BOOL:
+      size = sizeof(bool);
+      memcpy(&val->v.boolV, ptr, size);
+      break;
+  }
+  *value = val;
+  return RC_OK;
 }
 
 
@@ -260,35 +432,74 @@ int main(int argc, char *argv[]) {
   b[2] = "EL";
   b[3] = "AN";
   DataType *c = newArray(DataType, a);
-  c[0] = c[1] = c[2] = c[3] = 1;
+  c[0] = DT_INT;
+  c[1] = DT_FLOAT;
+  c[2] = DT_BOOL;
+  c[3] = DT_STRING;
   int *d = newIntArr(a);
-  d[0] = 10;
-  d[1] = 30;
-  d[2] = 20;
+  d[0] = 0;
+  d[1] = 0;
+  d[2] = 0;
   d[3] = 5;
   int e = 2;
   int *f = newIntArr(e);
   f[0] = 1;
   f[1] = 3;
   printf("\n\n");
-  Schema *s = createSchema(a, b, c, d, e, f);
   initRecordManager(NULL);
+  Schema *s = createSchema(a, b, c, d, e, f);
+  printf("1.1st schema : ");
+  printSchema(s);
+  printf("1.1st schema string : %s\n", stringifySchema(s));
+  printf("1.1st schema record size : %d\n\n", getRecordSize(s));
+  printf("------------------------------------------------------------------------------------------\n");
+  Record *record;
+  createRecord(&record, s);
+  Value *val = new(Value);
+  val->dt = DT_INT;
+  val->v.intV = 56;
+  setAttr(record, s, 0, val);
+  val->dt = DT_FLOAT;
+  val->v.floatV = 56.56;
+  setAttr(record, s, 1, val);
+  val->dt = DT_BOOL;
+  val->v.boolV = true;
+  setAttr(record, s, 2, val);
+  val->dt = DT_STRING;
+  val->v.stringV = copyString("56fs.");
+  setAttr(record, s, 3, val);
+  printRecord(s, record);
+  printf("------------------------------------------------------------------------------------------\n");
+  free(val->v.stringV);
+  free(val);
+  printf("1.2st schema : ");
+  printSchema(s);
+  printf("1.2st schema string : %s\n", stringifySchema(s));
+  printf("1.2st schema record size : %d\n\n", getRecordSize(s));
+  printf("------------------------------------------------------------------------------------------\n");
   createTable("shweelan", s);
   RM_TableData *rel = new(RM_TableData);
   openTable(rel, "shweelan");
+  printf("rel.1 schema : ");
+  printSchema(rel->schema);
+  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
+  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
+  printf("------------------------------------------------------------------------------------------\n");
   closeTable(rel);
   deleteTable("shweelan");
-  printf("first schema : ");
+  printf("1.3st schema : ");
   printSchema(s);
   char *ss = stringifySchema(s);
-  printf("first schema string : %s\n", ss);
-  printf("first schema record size : %d\n\n", getRecordSize(s));
+  printf("1.3st schema string : %s\n", ss);
+  printf("1.3st schema record size : %d\n\n", getRecordSize(s));
+  printf("------------------------------------------------------------------------------------------\n");
   Schema *ns = parseSchema(ss);
-  printf("second schema : ");
+  printf("2.1nd schema : ");
   printSchema(ns);
   char *nss = stringifySchema(ns);
-  printf("second schema string : %s\n", nss);
-  printf("second schema record size : %d\n\n", getRecordSize(ns));
+  printf("2.1nd schema string : %s\n", nss);
+  printf("2.1nd schema record size : %d\n\n", getRecordSize(ns));
+  printf("------------------------------------------------------------------------------------------\n");
   printf("\n");
   freeSchema(s);
   freeSchema(ns);
