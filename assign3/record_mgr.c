@@ -31,11 +31,26 @@ void freeSchemaObjects(int numAttr, char **attrNames, DataType *dataTypes, int *
 }
 
 
+int getSchemaStringLength(char *string) {
+  int length;
+  int formatLen = 8;
+  char intString[formatLen + 1];
+  memcpy(&intString[0], string, formatLen);
+  intString[formatLen] = '\0';
+  length = (int) strtol(intString, NULL, 16);
+  return length;
+}
+
+
 char * stringifySchema(Schema *schema) {
-  // TODO schema should not go above PAGE_SIZE - 1(\0 terminator)
   char *string = newStr(PAGE_SIZE - 1); // -1 because newStr adds 1 byte for \0 terminator // TODO free it[count, multiple maybe]
-  char intString[9];
+  // placeholder for schema length
+  int formatLen = 8;
   char *format = "%08x";
+  char intString[formatLen + 1];// +1 for \0 terminator
+  sprintf(&intString[0], format, 0); // placeholder for schema length
+  strcat(string, intString);
+  strcat(string, DELIMITER);
   sprintf(&intString[0], format, schema->numAttr);
   strcat(string, intString);
   strcat(string, DELIMITER);
@@ -61,14 +76,24 @@ char * stringifySchema(Schema *schema) {
       strcat(string, DELIMITER);
     }
   }
+  int length = (int) strlen(string);
+  length++; // +1 for \0 terminator
+  if (length > PAGE_SIZE) {
+    // TODO throw error
+  }
+  sprintf(&intString[0], format, length);
+  memcpy(string, &intString, formatLen);
   return string;
 }
 
 
 Schema * parseSchema(char *_string) {
-  char *string = copyString(_string); // TODO free it, Done below
+  int length = getSchemaStringLength(_string);
+  char *string = newCharArr(length); // TODO free it, Done below
+  memcpy(string, _string, length);
   char *token;
-  token = strtok(string, DELIMITER);
+  token = strtok(string, DELIMITER); // ignore it's already the length of schema
+  token = strtok(NULL, DELIMITER);
   int numAttr = (int) strtol(token, NULL, 16);
   char **attrNames = newArray(char *, numAttr); // TODO free it, Done in freeSchemaObjects
   DataType *dataTypes = newArray(DataType, numAttr); // TODO free it, Done in freeSchemaObjects
