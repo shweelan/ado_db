@@ -225,6 +225,51 @@ int getRecordSizeInBytes(Schema *schema, bool withTerminators) {
   return size;
 }
 
+
+RC readWriteRecord(char op, RM_TableData *rel, Record *record) {
+  RC err;
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+  BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
+  int recordSize = getRecordSizeInBytes(rel->schema, true);
+
+  // TODO get these from freeSpaceManager, or from record->id depends on op
+  int pageNum = 0;
+  int slotNum = 0;
+
+  pageNum += TABLE_HEADER_LEN;
+  if ((err = pinPage(bm, page, pageNum))) {
+    free(page);
+    return err;
+  }
+  int position = PAGE_HEADER_LEN + (recordSize * slotNum);
+
+  char *ptr = page->data; // pointer to bytes array
+  ptr += position;
+
+  if (op == 'r') {
+    memcpy(record->data, ptr, recordSize);
+  }
+  else if (op == 'w') {
+    memcpy(ptr, record->data, recordSize);
+    if ((err = markDirty(bm,page))) {
+      free(page);
+      return err;
+    }
+  }
+  else {
+    free(page);
+    // TODO THROW
+    return RC_GENERAL_ERROR;
+  }
+  if ((err = unpinPage(bm, page))) {
+    free(page);
+    return err;
+  }
+  free(page);
+  return RC_OK;
+}
+
+
 //functionality
 
 
@@ -449,6 +494,72 @@ RC getAttr (Record *record, Schema *schema, int attrNum, Value **value) {
 }
 
 
+RC insertRecord (RM_TableData *rel, Record *record) {
+  return readWriteRecord('w', rel, record);
+}
+
+
+RC getRecord (RM_TableData *rel, RID id, Record *record) {
+  return readWriteRecord('r', rel, record);
+}
+
+
+// keeping this in case we need it as separate functions later
+RC insertRecord_tmp (RM_TableData *rel, Record *record) {
+  RC err;
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+  BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
+  int recordSize = getRecordSizeInBytes(rel->schema, true);
+  // TODO get these from freeSpaceManager
+  int pageNum = 0;
+  int slotNum = 0;
+  pageNum += TABLE_HEADER_LEN;
+  if ((err = pinPage(bm, page, pageNum))) {
+    free(page);
+    return err;
+  }
+  int position = PAGE_HEADER_LEN + (recordSize * slotNum);
+  char *ptr = page->data; // pointer to bytes array
+  ptr += position;
+  memcpy(ptr, record->data, recordSize);
+  if ((err = markDirty(bm,page))) {
+    free(page);
+    return err;
+  }
+  if ((err = unpinPage(bm, page))) {
+    free(page);
+    return err;
+  }
+  free(page);
+  return RC_OK;
+}
+
+
+RC getRecord_tmp (RM_TableData *rel, RID id, Record *record) {
+  RC err;
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+  BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done Below
+  int recordSize = getRecordSizeInBytes(rel->schema, true);
+  int pageNum = 0;//id.page;
+  int slotNum = 0;//id.slot;
+  pageNum += TABLE_HEADER_LEN;
+  if ((err = pinPage(bm, page, pageNum))) {
+    free(page);
+    return err;
+  }
+  int position = PAGE_HEADER_LEN + (recordSize * slotNum);
+  char *ptr = page->data; // pointer to bytes array
+  ptr += position;
+  memcpy(record->data, ptr, recordSize);
+  if ((err = unpinPage(bm, page))) {
+    free(page);
+    return err;
+  }
+  free(page);
+  return RC_OK;
+}
+
+
 int main(int argc, char *argv[]) {
   int a = 4;
   char **b = newArray(char *, a);
@@ -457,15 +568,15 @@ int main(int argc, char *argv[]) {
   b[2] = "EL";
   b[3] = "AN";
   DataType *c = newArray(DataType, a);
-  c[0] = DT_INT;
-  c[1] = DT_FLOAT;
+  c[0] = DT_STRING;
+  c[1] = DT_INT;
   c[2] = DT_BOOL;
-  c[3] = DT_STRING;
+  c[3] = DT_FLOAT;
   int *d = newIntArr(a);
-  d[0] = 0;
+  d[0] = 5;
   d[1] = 0;
   d[2] = 0;
-  d[3] = 5;
+  d[3] = 0;
   int e = 2;
   int *f = newIntArr(e);
   f[0] = 1;
@@ -475,57 +586,64 @@ int main(int argc, char *argv[]) {
   Schema *s = createSchema(a, b, c, d, e, f);
   printf("1.1st schema : ");
   printSchema(s);
-  printf("1.1st schema string : %s\n", stringifySchema(s));
-  printf("1.1st schema record size : %d\n\n", getRecordSize(s));
+//  printf("1.1st schema string : %s\n", stringifySchema(s));
+//  printf("1.1st schema record size : %d\n\n", getRecordSize(s));
   printf("------------------------------------------------------------------------------------------\n");
   Record *record;
   createRecord(&record, s);
   Value *val = new(Value);
-  val->dt = DT_INT;
-  val->v.intV = 56;
+  val->dt = DT_STRING;
+  val->v.stringV = copyString("56fs.");
   setAttr(record, s, 0, val);
-  val->dt = DT_FLOAT;
-  val->v.floatV = 56.56;
+  free(val->v.stringV);
+  val->dt = DT_INT;
+  val->v.intV = 65;
   setAttr(record, s, 1, val);
   val->dt = DT_BOOL;
   val->v.boolV = true;
   setAttr(record, s, 2, val);
-  val->dt = DT_STRING;
-  val->v.stringV = copyString("56fs.");
+  val->dt = DT_FLOAT;
+  val->v.floatV = 56.56;
   setAttr(record, s, 3, val);
+  printf("---------- %s\n", "record");
   printRecord(s, record);
   printf("------------------------------------------------------------------------------------------\n");
-  free(val->v.stringV);
   free(val);
-  printf("1.2st schema : ");
-  printSchema(s);
-  printf("1.2st schema string : %s\n", stringifySchema(s));
-  printf("1.2st schema record size : %d\n\n", getRecordSize(s));
-  printf("------------------------------------------------------------------------------------------\n");
+//  printf("1.2st schema : ");
+//  printSchema(s);
+//  printf("1.2st schema string : %s\n", stringifySchema(s));
+//  printf("1.2st schema record size : %d\n\n", getRecordSize(s));
+//  printf("------------------------------------------------------------------------------------------\n");
   createTable("shweelan", s);
   RM_TableData *rel = new(RM_TableData);
   openTable(rel, "shweelan");
-  printf("rel.1 schema : ");
-  printSchema(rel->schema);
-  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
-  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
+//  printf("rel.1 schema : ");
+//  printSchema(rel->schema);
+  insertRecord(rel, record);
+  Record *recordRestored;
+  createRecord(&recordRestored, s);
+  getRecord(rel, recordRestored->id, recordRestored);
+  printf("---------- %s\n", "recordRestored");
+  printRecord(rel->schema, recordRestored);
+//  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
+//  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
   printf("------------------------------------------------------------------------------------------\n");
   closeTable(rel);
   deleteTable("shweelan");
-  printf("1.3st schema : ");
-  printSchema(s);
+//  printf("1.3st schema : ");
+//  printSchema(s);
   char *ss = stringifySchema(s);
-  printf("1.3st schema string : %s\n", ss);
-  printf("1.3st schema record size : %d\n\n", getRecordSize(s));
-  printf("------------------------------------------------------------------------------------------\n");
+//  printf("1.3st schema string : %s\n", ss);
+//  printf("1.3st schema record size : %d\n\n", getRecordSize(s));
+//  printf("------------------------------------------------------------------------------------------\n");
   Schema *ns = parseSchema(ss);
-  printf("2.1nd schema : ");
-  printSchema(ns);
+//  printf("2.1nd schema : ");
+//  printSchema(ns);
   char *nss = stringifySchema(ns);
-  printf("2.1nd schema string : %s\n", nss);
-  printf("2.1nd schema record size : %d\n\n", getRecordSize(ns));
-  printf("------------------------------------------------------------------------------------------\n");
-  printf("\n");
+//  printf("2.1nd schema string : %s\n", nss);
+//  printf("2.1nd schema record size : %d\n\n", getRecordSize(ns));
+//  printf("------------------------------------------------------------------------------------------\n");
+//  printf("\n");
   freeSchema(s);
   freeSchema(ns);
   free(ss);

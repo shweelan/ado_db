@@ -17,6 +17,13 @@
 /* Per table buffer size */
 #define PER_TBL_BUF_SIZE 10
 
+/* Page header length */
+#define PAGE_HEADER_LEN 11
+
+/* Table header length */
+#define TABLE_HEADER_LEN 2
+
+
 /* DB path configuration */
 #define PATH_DIR "/tmp/database_ado/"
 #define DEFAULT_MODE 0777
