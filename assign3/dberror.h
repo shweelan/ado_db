@@ -20,9 +20,14 @@
 /* Page header length */
 #define PAGE_HEADER_LEN 11
 
-/* Table header length */
-#define TABLE_HEADER_LEN 2
+/* bytes to represent number of slots in page */
+#define BYTES_SLOTS_COUNT 2
 
+/* Table header length */
+#define TABLE_HEADER_PAGES_LEN 2
+
+/* Number of bits in byte */
+#define NUM_BITS 8
 
 /* DB path configuration */
 #define PATH_DIR "/tmp/database_ado/"
