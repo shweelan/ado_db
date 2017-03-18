@@ -4,6 +4,8 @@
 #include "dberror.h"
 #include "expr.h"
 #include "tables.h"
+#include "const.h"
+
 
 // Bookkeeping for scans
 typedef struct RM_ScanHandle

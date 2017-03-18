@@ -1,8 +1,6 @@
-#include "dberror.h"
 #include "storage_mgr.h"
 #include "buffer_mgr.h"
 #include "record_mgr.h"
-#include "tables.h"
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>

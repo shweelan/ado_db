@@ -2,6 +2,7 @@
 #define BUFFER_MANAGER_H
 
 // Include return codes and methods for logging errors
+#include "const.h"
 #include "dberror.h"
 #include "data_structures.h"
 #include "storage_mgr.h"

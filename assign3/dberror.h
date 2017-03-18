@@ -2,7 +2,6 @@
 #define DBERROR_H
 
 #include "stdio.h"
-#include "const.h"
 #include <errno.h>
 
 /* return code definitions */
