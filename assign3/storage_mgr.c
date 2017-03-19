@@ -72,7 +72,7 @@ RC createPageFile (char *fileName) {
    * S_IRGRP : Read permission to group ,S_IRGRP : Write permission to group
    * S_IROTH : Read permission to others ,S_IWOTH : Write permission to others
   */
-  mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+  mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH | O_TRUNC;
   fd = creat(fileName, mode);
   if (fd == -1) {
     return RC_FS_ERROR;

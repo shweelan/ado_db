@@ -1,11 +1,13 @@
 #include "storage_mgr.h"
 #include "buffer_mgr.h"
 #include "record_mgr.h"
+#include "expr.h"
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
 #include <float.h>
 #include <math.h>
+
 
 
 // helpers
@@ -111,8 +113,7 @@ char * stringifySchema(Schema *schema) {
 }
 
 
-Schema * parseSchema(char *_string) {
-  int length = getSchemaStringLength(_string);
+Schema * parseSchema(char *_string, int length) {
   char *string = newCharArr(length); // TODO free it, Done below
   memcpy(string, _string, length);
   char *token;
@@ -277,7 +278,7 @@ void unsetBit(char *bitMap, int bitIdx) {
 int getUnsetBitIndex(char *bitMap, int bitmapSize) {
   int bytesCount = 0;
   unsigned char byte;
-  while(bitmapSize - bytesCount) {
+  while(bytesCount < bitmapSize) {
     byte = bitMap[bytesCount];
     if (byte < UCHAR_MAX) {
       int i = NUM_BITS;
@@ -301,7 +302,7 @@ RC getEmptyPage(RM_TableData *rel, int *pageNum) {
     return err;
   }
 
-  int schemaLen = getSchemaStringLength(page->data);
+  int schemaLen = rel->schemaLen;
   char *ptr;
   int res;
   if (schemaLen < PAGE_SIZE) {
@@ -340,7 +341,7 @@ RC changePageFillBit(RM_TableData *rel, int pageNum, bool bitVal) {
     return err;
   }
 
-  int schemaLen = getSchemaStringLength(page->data);
+  int schemaLen = rel->schemaLen;
   int bitmapSize = PAGE_SIZE - schemaLen;
   char *ptr;
   if (bitmapSize && pageNum < bitmapSize * 8) {
@@ -428,13 +429,15 @@ RC openTable (RM_TableData *rel, char *name) {
   if ((err = atomicPinPage(bm, &pageHandle, 0))) {
     return err;
   }
-  Schema *schema = parseSchema(pageHandle->data);
+  rel->schemaLen = getSchemaStringLength(pageHandle->data);
+  Schema *schema = parseSchema(pageHandle->data, rel->schemaLen);
   rel->name = copyString(name); // TODO free it, Done in closeTable
   rel->schema = schema;
   int recordSize = getRecordSizeInBytes(schema, true);
   int pageSize = PAGE_SIZE - PAGE_HEADER_LEN;
   rel->maxSlotsPerPage = floor((pageSize * NUM_BITS) / (recordSize * NUM_BITS + 1)); // pageSize = (X * recordSize) + (X / NUM_BITS)
-  rel->slotsBitMapSize = ceil(rel->maxSlotsPerPage / NUM_BITS);
+  rel->slotsBitMapSize = ceil(((float) rel->maxSlotsPerPage) / NUM_BITS);
+  rel->recordByteSize = recordSize;
   rel->mgmtData = bm;
   return atomicUnpinPage(bm, pageHandle, false); // false for not markDirty
 }
@@ -628,7 +631,8 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   BM_PageHandle *page;
-  int pageNum, slotNum;
+  int pageNum = 0;
+  int slotNum;
   short totalSlots;
   if ((err = getEmptyPage(rel, &pageNum))) {
     return err;
@@ -638,31 +642,23 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   }
   char *ptr = page->data;
   memcpy(&totalSlots, ptr, sizeof(short)); // may use later
-  ptr += BYTES_SLOTS_COUNT;
-  memcpy(&slotNum, ptr, BYTES_SLOTS_COUNT); // copy nextSlot pointer
-
-  // TODO dont skip, and deal with slotNum
-  if (true || slotNum < 0) { // means the nextSlot doesnot know where to write
-    ptr = page->data + PAGE_HEADER_LEN;
-    slotNum = getUnsetBitIndex(ptr, rel->slotsBitMapSize);
-  }
-
-  if (slotNum < 0 || slotNum >= rel->maxSlotsPerPage) { // -1 means not found and it is a problem
-    // TODO THROW, it should not go over maxSlot
-  }
-
-  ptr = page->data; // pointer to bytes array
-  totalSlots++;
-  memcpy(ptr, &totalSlots, sizeof(short)); // writing the totalSlots
   ptr = page->data + PAGE_HEADER_LEN;
+  slotNum = getUnsetBitIndex(ptr, rel->slotsBitMapSize);
+  if (slotNum < 0 || slotNum >= rel->maxSlotsPerPage) { // -1 means not found and it is a problem
+    printf("!!!!!!!!!!!!!!!!!!!! PANIC SOME ERROR HAPPENED WITH PAGE#%d SLOT#%d\n", pageNum, slotNum);
+    exit(0);
+  }
+
+  totalSlots++;
+  memcpy(page->data, &totalSlots, sizeof(short)); // writing the totalSlots
   setBit(ptr, slotNum); // setting the slot bits
   // TODO set the next free slot
-  int recordSize = getRecordSizeInBytes(rel->schema, true);
+  int recordSize = rel->recordByteSize;
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
   ptr = page->data + position;
   memcpy(ptr, record->data, recordSize);
-  printf("---- DATA_PAGE ------ %s\n", page->data);
-  printf("$$$$$$$$ %d of %d\n", totalSlots, rel->maxSlotsPerPage);
+  //printf("---- DATA_PAGE ------ %s\n", page->data);
+  //printf("$$$$$$$$ %d of %d\n", totalSlots, rel->maxSlotsPerPage);
   if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
     return err;
   }
@@ -674,7 +670,8 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   }
   record->id.page = pageNum;
   record->id.slot = slotNum;
-  printf("-------- INSERTING INTO PAGE %d AND SLOT %d\n", pageNum, slotNum);
+  //printf("-------- INSERTING INTO SLOT %d.%d on byte %d \n", pageNum, slotNum, position);
+  printRecord(rel->schema, record);
   return RC_OK;
 }
 
@@ -695,10 +692,11 @@ RC getRecord (RM_TableData *rel, RID id, Record *record) {
     atomicUnpinPage(bm, page, false); // used instead of atomicUnpinPage because we need to free page all the time
     return RC_RM_NO_SUCH_TUPLE;
   }
-  int recordSize = getRecordSizeInBytes(rel->schema, true);
+  int recordSize = rel->recordByteSize;
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
   ptr = page->data; // pointer to bytes array
   ptr += position;
+  //printf("reading slot %d.%d, from byte  %d\n", pageNum, slotNum, position);
   memcpy(record->data, ptr, recordSize);
   return atomicUnpinPage(bm, page, false); // false for not markDirty
 }
@@ -754,7 +752,7 @@ RC updateRecord (RM_TableData *rel, Record *record) {
     atomicUnpinPage(bm, page, false); // used instead of atomicUnpinPage because we need to free page all the time
     return RC_RM_NO_SUCH_TUPLE;
   }
-  int recordSize = getRecordSizeInBytes(rel->schema, true);
+  int recordSize = rel->recordByteSize;
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
   ptr = page->data + position;
   memcpy(ptr, record->data, recordSize);
@@ -762,7 +760,62 @@ RC updateRecord (RM_TableData *rel, Record *record) {
 }
 
 
-int main(int argc, char *argv[]) {
+RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond) {
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+  forceFlushPool(bm);
+  ScanMgmtInfo *smi = new(ScanMgmtInfo); // TODO free it, Done in closeScan
+  PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
+  SM_FileHandle *fHandle = pmi->fHandle;
+  int totalNumDataPages = fHandle->totalNumPages - TABLE_HEADER_PAGES_LEN;
+  smi->page = 0;
+  smi->slot = -1; // next Slot is 0
+  smi->totalPages = totalNumDataPages;
+  smi->maxSlots = rel->maxSlotsPerPage;
+  smi->condition = cond;
+  scan->rel = rel;
+  scan->mgmtData = smi;
+  return RC_OK;
+}
+
+
+RC next (RM_ScanHandle *scan, Record *record) {
+  ScanMgmtInfo *smi = (ScanMgmtInfo *)(scan->mgmtData);
+  Value *val;
+  RC err;
+  if (++smi->slot >= smi->maxSlots) {
+    smi->slot = 0;
+    if(++smi->page >= smi->totalPages) {
+      return RC_RM_NO_MORE_TUPLES;
+    }
+  }
+  record->id.page = smi->page;
+  record->id.slot = smi->slot;
+
+  err = getRecord(scan->rel, record->id, record);
+  if (err) {
+    if (err == RC_RM_NO_SUCH_TUPLE) {
+      return next(scan, record);
+    }
+    return err;
+  }
+  if ((err = evalExpr(record, scan->rel->schema, smi->condition, &val))) {
+    return err;
+  }
+	if (val->v.boolV == 1) {
+    return RC_OK;
+  }
+  return next(scan, record);
+}
+
+
+RC closeScan (RM_ScanHandle *scan) {
+  ScanMgmtInfo *smi = (ScanMgmtInfo *)(scan->mgmtData);
+  free(smi);
+	return RC_OK;
+}
+
+
+int _main(int argc, char *argv[]) {
   int a = 4;
   char **b = newArray(char *, a);
   b[0] = "SH";
