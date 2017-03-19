@@ -92,6 +92,7 @@ void processCommand(char *input) {
 
 
 int main(int argc, char *argv[]) {
+  initRecordManager(NULL);
   char *input = newStr(PAGE_SIZE);
   while(1) {
     printf("Enter your command! [CT : createTable, IR : insertRecord, DR : deleteRecord, UR : updateRecord, ST : scanTable, DT : deleteTable] : ");
