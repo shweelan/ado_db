@@ -671,7 +671,7 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   record->id.page = pageNum;
   record->id.slot = slotNum;
   //printf("-------- INSERTING INTO SLOT %d.%d on byte %d \n", pageNum, slotNum, position);
-  printRecord(rel->schema, record);
+  //printRecord(rel->schema, record);
   return RC_OK;
 }
 
