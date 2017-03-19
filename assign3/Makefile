@@ -6,10 +6,8 @@ run1: test_assign3_1.o rm_serializer.o record_mgr.o dberror.o storage_mgr.o buff
 run2: test_expr.o rm_serializer.o record_mgr.o dberror.o storage_mgr.o buffer_mgr.o data_structures.o expr.o
 	gcc -o bin/test_expr/run bin/test_expr.o bin/rm_serializer.o bin/record_mgr.o bin/dberror.o bin/storage_mgr.o bin/buffer_mgr.o bin/data_structures.o bin/expr.o
 
-
 test_expr.o: test_expr.c dberror.h expr.h record_mgr.h tables.h test_helper.h
 	gcc -c test_expr.c -o bin/test_expr.o
-
 
 test_assign3_1.o: test_assign3_1.c dberror.h expr.h record_mgr.h tables.h test_helper.h
 	gcc -c test_assign3_1.c -o bin/test_assign3_1.o
