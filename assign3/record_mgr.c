@@ -614,6 +614,7 @@ RC insertRecord (RM_TableData *rel, Record *record) {
     free(page);
     return err;
   }
+  printf("---- DATA_PAGE ------ %s\n", page->data);
   printf("$$$$$$$$ %d of %d\n", totalSlots, rel->maxSlotsPerPage);
   if (totalSlots >= rel->maxSlotsPerPage) {
     if ((err = changePageFillBit(rel, pageNum - TABLE_HEADER_PAGES_LEN, true))) { // starting index from 0
