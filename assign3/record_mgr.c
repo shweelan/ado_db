@@ -653,7 +653,7 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   printf("---- DATA_PAGE ------ %s\n", page->data);
   printf("$$$$$$$$ %d of %d\n", totalSlots, rel->maxSlotsPerPage);
   if (totalSlots >= rel->maxSlotsPerPage) {
-    err = changePageFillBit(rel, pageNum, true);
+    err = changePageFillBit(rel, pageNum, true); // true set it as full
   }
   free(page);
   if (err) {
@@ -711,10 +711,38 @@ RC deleteRecord (RM_TableData *rel, RID id) {
     return RC_RM_NO_SUCH_TUPLE;
   }
   unsetBit(ptr, slotNum);
+  short totalSlots;
+  ptr = page->data;
+  memcpy(&totalSlots, ptr, sizeof(short)); // may use later
+  totalSlots--;
+  memcpy(ptr, &totalSlots, sizeof(short));
   if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
     return err;
   }
   free(page);
+  if (totalSlots == rel->maxSlotsPerPage - 1) { // means it was full page, mark it as unfull now
+    err = changePageFillBit(rel, pageNum, false); // false set it as unfull
+  }
+  return RC_OK;
+}
+
+
+RC updateRecord (RM_TableData *rel, Record *record) {
+  RC err;
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+  BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
+  int pageNum = record->id.page;
+  int slotNum = record->id.slot;
+
+  if ((err = atomicPinPage(bm, page, pageNum + TABLE_HEADER_PAGES_LEN))) {
+    return err;
+  }
+
+  char *ptr = page->data + PAGE_HEADER_LEN;
+
+  if (!isSetBit(ptr, slotNum)) {
+    return RC_RM_NO_SUCH_TUPLE;
+  }
   return RC_OK;
 }
 
@@ -787,7 +815,7 @@ int main(int argc, char *argv[]) {
 //  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
 //  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
   printf("deleteing record %d.%d err#%d\n", record->id.page, record->id.slot , deleteRecord(rel, record->id));
-  printf("getting record %d.%d err#%d\n", record->id.page, record->id.slot , deleteRecord(rel, record->id));
+  printf("getting record %d.%d err#%d\n", record->id.page, record->id.slot , getRecord(rel, record->id, recordRestored));
   insertRecord(rel, recordRestored);
   insertRecord(rel, recordRestored);
   insertRecord(rel, recordRestored);
