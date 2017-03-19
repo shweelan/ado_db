@@ -604,7 +604,7 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   ptr = page->data + PAGE_HEADER_LEN;
   slotNum = getUnsetBitIndex(ptr, rel->slotsBitMapSize);
   if (slotNum < 0 || slotNum >= rel->maxSlotsPerPage) { // -1 means not found and it is a problem
-    printf("!!!!!!!!!!!!!!!!!!!! PANIC !! SOME ERROR HAPPENED WITH PAGE#%d SLOT#%d\n", pageNum, slotNum);
+    printf("!!!!!!!!!!!!!!!!!!!! PANIC !! SOME ERROR HAPPENED WITH PAGE#%d SLOT#%d WITH TOTAL %d\n", pageNum, slotNum, totalSlots);
     exit(0);
   }
 
