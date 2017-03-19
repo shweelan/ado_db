@@ -18,6 +18,31 @@ char *copyString(char *_string) {
 }
 
 
+RC atomicPinPage(BM_BufferPool *bm, BM_PageHandle *resultPage, int pageIdx) {
+  RC err = pinPage(bm, resultPage, pageIdx);
+  if (err) {
+    free(resultPage);
+  }
+  return err;
+}
+
+
+RC atomicUnpinPage(BM_BufferPool *bm, BM_PageHandle *page, bool dirty) {
+  RC err;
+  if (dirty) {
+    if ((err = markDirty(bm, page))) {
+      free(page);
+      return err;
+    }
+  }
+  err = unpinPage(bm, page);
+  if (err) {
+    free(page);
+  }
+  return err;
+}
+
+
 void freeSchemaObjects(int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int *keyAttrs) {
   int i;
   for (i = 0; i < numAttr; i++) {
@@ -225,7 +250,7 @@ int getRecordSizeInBytes(Schema *schema, bool withTerminators) {
 }
 
 
-bool isSet(char *bitMap, int bitIdx) {
+bool isSetBit(char *bitMap, int bitIdx) {
   int byteIdx = bitIdx / NUM_BITS;
   int bitSeq = NUM_BITS - (bitIdx % NUM_BITS);
   if (bitMap[byteIdx] & (1 << (bitSeq - 1))) {
@@ -271,8 +296,8 @@ RC getEmptyPage(RM_TableData *rel, int *pageNum) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
-  if ((err = pinPage(bm, page, 0))) { // page zero contains the header
-    free(page);
+  // page 0 contains the header and possibly some of the bitmap
+  if ((err = atomicPinPage(bm, page, 0))) {
     return err;
   }
 
@@ -290,11 +315,11 @@ RC getEmptyPage(RM_TableData *rel, int *pageNum) {
     }
   }
 
-  // not found in page 0
-  if ((err = pinPage(bm, page, 1))) { // page one contains the rest of bitMap
-    free(page);
+  // not found in page 0, page 1 contains the rest of bitMap
+  if ((err = atomicPinPage(bm, page, 0))) {
     return err;
   }
+
   ptr = page->data;
   res = getUnsetBitIndex(ptr, PAGE_SIZE); // no schema on page 1
   free(page);
@@ -310,10 +335,11 @@ RC changePageFillBit(RM_TableData *rel, int pageNum, bool bitVal) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
-  if ((err = pinPage(bm, page, 0))) { // page zero contains the header
-    free(page);
+  // page 0 contains the header and possibly some of the bitmap
+  if ((err = atomicPinPage(bm, page, 0))) {
     return err;
   }
+
   int schemaLen = getSchemaStringLength(page->data);
   int bitmapSize = PAGE_SIZE - schemaLen;
   char *ptr;
@@ -326,12 +352,16 @@ RC changePageFillBit(RM_TableData *rel, int pageNum, bool bitVal) {
     else {
       unsetBit(ptr, pageNum);
     }
+
+    if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
+      return err;
+    }
+
     free(page);
     return RC_OK;
   }
   // page bit is in page 1
-  if ((err = pinPage(bm, page, 1))) { // page one contains the rest of bitMap
-    free(page);
+  if ((err = atomicPinPage(bm, page, 1))) { // page one contains the rest of bitMap
     return err;
   }
   ptr = page->data;
@@ -341,6 +371,10 @@ RC changePageFillBit(RM_TableData *rel, int pageNum, bool bitVal) {
   }
   else {
     unsetBit(ptr, bitPos);
+  }
+
+  if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
+    return err;
   }
 
   free(page);
@@ -398,7 +432,7 @@ RC openTable (RM_TableData *rel, char *name) {
   if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_LRU, NULL))) {
     return err;
   }
-  if ((err = pinPage(bm, pageHandle, 0))) {
+  if ((err = atomicPinPage(bm, pageHandle, 0))) {
     return err;
   }
   Schema *schema = parseSchema(pageHandle->data);
@@ -409,7 +443,7 @@ RC openTable (RM_TableData *rel, char *name) {
   rel->maxSlotsPerPage = floor((pageSize * NUM_BITS) / (recordSize * NUM_BITS + 1)); // pageSize = (X * recordSize) + (X / NUM_BITS)
   rel->slotsBitMapSize = ceil(rel->maxSlotsPerPage / NUM_BITS);
   rel->mgmtData = bm;
-  if ((err = unpinPage(bm, pageHandle))) {
+  if ((err = atomicUnpinPage(bm, pageHandle, false))) { // false for not markDirty
     return err;
   }
   free(pageHandle);
@@ -580,14 +614,12 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
-  int recordSize = getRecordSizeInBytes(rel->schema, true);
   int pageNum, slotNum;
   short totalSlots;
   if ((err = getEmptyPage(rel, &pageNum))) {
     return err;
   }
-  if ((err = pinPage(bm, page, pageNum + TABLE_HEADER_PAGES_LEN))) {
-    free(page);
+  if ((err = atomicPinPage(bm, page, pageNum + TABLE_HEADER_PAGES_LEN))) {
     return err;
   }
   char *ptr = page->data;
@@ -611,26 +643,22 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   ptr = page->data + PAGE_HEADER_LEN;
   setBit(ptr, slotNum); // setting the slot bits
   // TODO set the next free slot
+  int recordSize = getRecordSizeInBytes(rel->schema, true);
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
   ptr = page->data + position;
   memcpy(ptr, record->data, recordSize);
-  if ((err = markDirty(bm,page))) {
-    free(page);
-    return err;
-  }
-  if ((err = unpinPage(bm, page))) {
-    free(page);
+  if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
     return err;
   }
   printf("---- DATA_PAGE ------ %s\n", page->data);
   printf("$$$$$$$$ %d of %d\n", totalSlots, rel->maxSlotsPerPage);
   if (totalSlots >= rel->maxSlotsPerPage) {
-    if ((err = changePageFillBit(rel, pageNum, true))) {
-      free(page);
-      return err;
-    }
+    err = changePageFillBit(rel, pageNum, true);
   }
   free(page);
+  if (err) {
+    return err;
+  }
   record->id.page = pageNum;
   record->id.slot = slotNum;
   printf("-------- INSERTING INTO PAGE %d AND SLOT %d\n", pageNum, slotNum);
@@ -642,27 +670,48 @@ RC getRecord (RM_TableData *rel, RID id, Record *record) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
-  int recordSize = getRecordSizeInBytes(rel->schema, true);
   int pageNum = id.page;
   int slotNum = id.slot;
-  pageNum += TABLE_HEADER_PAGES_LEN;
-  if ((err = pinPage(bm, page, pageNum))) {
-    free(page);
+  if ((err = atomicPinPage(bm, page, pageNum + TABLE_HEADER_PAGES_LEN))) {
     return err;
   }
   char *ptr = page->data;
   ptr += PAGE_HEADER_LEN;
 
-  if (!isSet(ptr, slotNum)) {
+  if (!isSetBit(ptr, slotNum)) {
     return RC_RM_NO_SUCH_TUPLE;
   }
-
+  int recordSize = getRecordSizeInBytes(rel->schema, true);
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
   ptr = page->data; // pointer to bytes array
   ptr += position;
   memcpy(record->data, ptr, recordSize);
-  if ((err = unpinPage(bm, page))) {
-    free(page);
+  if ((err = atomicUnpinPage(bm, page, false))) { // false for not markDirty
+    return err;
+  }
+  free(page);
+  return RC_OK;
+}
+
+
+RC deleteRecord (RM_TableData *rel, RID id) {
+  RC err;
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+  BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
+  int pageNum = id.page;
+  int slotNum = id.slot;
+
+  if ((err = atomicPinPage(bm, page, pageNum + TABLE_HEADER_PAGES_LEN))) {
+    return err;
+  }
+
+  char *ptr = page->data + PAGE_HEADER_LEN;
+
+  if (!isSetBit(ptr, slotNum)) {
+    return RC_RM_NO_SUCH_TUPLE;
+  }
+  unsetBit(ptr, slotNum);
+  if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
     return err;
   }
   free(page);
@@ -737,6 +786,8 @@ int main(int argc, char *argv[]) {
   printRecord(rel->schema, recordRestored);
 //  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
 //  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
+  printf("deleteing record %d.%d err#%d\n", record->id.page, record->id.slot , deleteRecord(rel, record->id));
+  printf("getting record %d.%d err#%d\n", record->id.page, record->id.slot , deleteRecord(rel, record->id));
   insertRecord(rel, recordRestored);
   insertRecord(rel, recordRestored);
   insertRecord(rel, recordRestored);
