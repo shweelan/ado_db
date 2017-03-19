@@ -785,7 +785,6 @@ int main(int argc, char *argv[]) {
   printf("---------- %s\n", "record");
   printRecord(s, record);
   printf("------------------------------------------------------------------------------------------\n");
-  free(val);
 //  printf("1.2st schema : ");
 //  printSchema(s);
 //  printf("1.2st schema string : %s\n", stringifySchema(s));
@@ -797,6 +796,12 @@ int main(int argc, char *argv[]) {
 //  printf("rel.1 schema : ");
 //  printSchema(rel->schema);
   insertRecord(rel, record);
+  val->dt = DT_STRING;
+  val->v.stringV = copyString("56fs473472jhfsdhfsdljfdnfds ksdhkf sdfl dskhskjh ksd fksnkchsfclalcbaewfgaewkkcaew");
+  setAttr(record, s, 0, val);
+  free(val->v.stringV);
+  free(val);
+  updateRecord(rel, record);
   Record *recordRestored;
   createRecord(&recordRestored, s);
   getRecord(rel, record->id, recordRestored);
