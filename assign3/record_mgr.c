@@ -440,6 +440,31 @@ RC openTable (RM_TableData *rel, char *name) {
 }
 
 
+int getNumTuples (RM_TableData *rel) {
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+  forceFlushPool(bm);
+  PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
+  SM_FileHandle *fHandle = pmi->fHandle;
+  int totalNumDataPages = fHandle->totalNumPages - TABLE_HEADER_PAGES_LEN;
+  BM_PageHandle *page;
+  int i = 0;
+  int res = 0;
+  short totalSlots;
+  while(i < totalNumDataPages) {
+    if (atomicPinPage(bm, &page, i + TABLE_HEADER_PAGES_LEN)) {
+      return -1;
+    }
+    memcpy(&totalSlots, page->data, sizeof(short));
+    res += totalSlots;
+    if (atomicUnpinPage(bm, page, false)) {
+      return -1;
+    }
+    i++;
+  }
+  return res;
+}
+
+
 RC closeTable (RM_TableData *rel) {
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
 	RC err;
@@ -796,6 +821,7 @@ int main(int argc, char *argv[]) {
 //  printf("rel.1 schema : ");
 //  printSchema(rel->schema);
   insertRecord(rel, record);
+  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
   val->dt = DT_STRING;
   val->v.stringV = copyString("56fs473472jhfsdhfsdljfdnfds ksdhkf sdfl dskhskjh ksd fksnkchsfclalcbaewfgaewkkcaew");
   setAttr(record, s, 0, val);
@@ -810,8 +836,10 @@ int main(int argc, char *argv[]) {
 //  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
 //  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
   printf("deleteing record %d.%d err#%d\n", record->id.page, record->id.slot , deleteRecord(rel, record->id));
+  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
   printf("getting record %d.%d err#%d\n", record->id.page, record->id.slot , getRecord(rel, record->id, recordRestored));
   insertRecord(rel, recordRestored);
+  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
   insertRecord(rel, recordRestored);
   insertRecord(rel, recordRestored);
   insertRecord(rel, recordRestored);
@@ -820,6 +848,10 @@ int main(int argc, char *argv[]) {
   insertRecord(rel, recordRestored);
   insertRecord(rel, recordRestored);
   insertRecord(rel, recordRestored);
+  insertRecord(rel, recordRestored);
+  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
+  insertRecord(rel, recordRestored);
+  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
   closeTable(rel);
   deleteTable("shweelan");
 //  printf("1.3st schema : ");
