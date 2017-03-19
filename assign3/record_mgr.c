@@ -225,6 +225,16 @@ int getRecordSizeInBytes(Schema *schema, bool withTerminators) {
 }
 
 
+bool isSet(char *bitMap, int bitIdx) {
+  int byteIdx = bitIdx / NUM_BITS;
+  int bitSeq = NUM_BITS - (bitIdx % NUM_BITS);
+  if (bitMap[byteIdx] & (1 << (bitSeq - 1))) {
+    return true;
+  }
+  return false;
+}
+
+
 void setBit(char *bitMap, int bitIdx) {
   int byteIdx = bitIdx / NUM_BITS;
   int bitSeq = NUM_BITS - (bitIdx % NUM_BITS);
@@ -571,14 +581,12 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
   int recordSize = getRecordSizeInBytes(rel->schema, true);
-  int pageNum = 0;
-  int slotNum = 0;
-  short totalSlots = 0;
+  int pageNum, slotNum;
+  short totalSlots;
   if ((err = getEmptyPage(rel, &pageNum))) {
     return err;
   }
-  pageNum += TABLE_HEADER_PAGES_LEN;
-  if ((err = pinPage(bm, page, pageNum))) {
+  if ((err = pinPage(bm, page, pageNum + TABLE_HEADER_PAGES_LEN))) {
     free(page);
     return err;
   }
@@ -617,7 +625,7 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   printf("---- DATA_PAGE ------ %s\n", page->data);
   printf("$$$$$$$$ %d of %d\n", totalSlots, rel->maxSlotsPerPage);
   if (totalSlots >= rel->maxSlotsPerPage) {
-    if ((err = changePageFillBit(rel, pageNum - TABLE_HEADER_PAGES_LEN, true))) { // starting index from 0
+    if ((err = changePageFillBit(rel, pageNum, true))) {
       free(page);
       return err;
     }
@@ -625,7 +633,7 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   free(page);
   record->id.page = pageNum;
   record->id.slot = slotNum;
-  printf("-------- INSERTING INTO PAGE %d AND SLOT %d\n", pageNum - 2, slotNum);
+  printf("-------- INSERTING INTO PAGE %d AND SLOT %d\n", pageNum, slotNum);
   return RC_OK;
 }
 
@@ -635,15 +643,22 @@ RC getRecord (RM_TableData *rel, RID id, Record *record) {
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
   int recordSize = getRecordSizeInBytes(rel->schema, true);
-  int pageNum = record->id.page;
-  int slotNum = record->id.slot;
+  int pageNum = id.page;
+  int slotNum = id.slot;
   pageNum += TABLE_HEADER_PAGES_LEN;
   if ((err = pinPage(bm, page, pageNum))) {
     free(page);
     return err;
   }
+  char *ptr = page->data;
+  ptr += PAGE_HEADER_LEN;
+
+  if (!isSet(ptr, slotNum)) {
+    return RC_RM_NO_SUCH_TUPLE;
+  }
+
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
-  char *ptr = page->data; // pointer to bytes array
+  ptr = page->data; // pointer to bytes array
   ptr += position;
   memcpy(record->data, ptr, recordSize);
   if ((err = unpinPage(bm, page))) {
@@ -717,11 +732,9 @@ int main(int argc, char *argv[]) {
   insertRecord(rel, record);
   Record *recordRestored;
   createRecord(&recordRestored, s);
-  recordRestored->id.page = 0;
-  recordRestored->id.slot = 0;
-  getRecord(rel, recordRestored->id, recordRestored);
-//  printf("---------- %s\n", "recordRestored");
-//  printRecord(rel->schema, recordRestored);
+  getRecord(rel, record->id, recordRestored);
+  printf("---------- %s\n", "recordRestored");
+  printRecord(rel->schema, recordRestored);
 //  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
 //  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
   insertRecord(rel, recordRestored);
