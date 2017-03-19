@@ -50,7 +50,6 @@ typedef struct RM_TableData
   Schema *schema;
   int maxSlotsPerPage;
   int slotsBitMapSize;
-  int schemaLen;
   int recordByteSize;
   void *mgmtData;
 } RM_TableData;
