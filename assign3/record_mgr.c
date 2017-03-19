@@ -232,6 +232,13 @@ void setBit(char *bitMap, int bitIdx) {
 }
 
 
+void unsetBit(char *bitMap, int bitIdx) {
+  int byteIdx = bitIdx / NUM_BITS;
+  int bitSeq = NUM_BITS - (bitIdx % NUM_BITS);
+  bitMap[byteIdx] = bitMap[byteIdx] & ~(1 << (bitSeq - 1));
+}
+
+
 int getUnsetBitIndex(char *bitMap, int bitmapSize) {
   int bytesCount = 0;
   unsigned char byte;
@@ -256,6 +263,7 @@ RC getEmptyPage(RM_TableData *rel, int *pageNum) {
   BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
   if ((err = pinPage(bm, page, 0))) { // page zero contains the header
     free(page);
+    return err;
   }
 
   int schemaLen = getSchemaStringLength(page->data);
@@ -275,6 +283,7 @@ RC getEmptyPage(RM_TableData *rel, int *pageNum) {
   // not found in page 0
   if ((err = pinPage(bm, page, 1))) { // page one contains the rest of bitMap
     free(page);
+    return err;
   }
   ptr = page->data;
   res = getUnsetBitIndex(ptr, PAGE_SIZE); // no schema on page 1
@@ -284,6 +293,48 @@ RC getEmptyPage(RM_TableData *rel, int *pageNum) {
     return RC_OK;
   }
   return RC_RM_LIMIT_EXCEEDED; // no more space on that file
+}
+
+
+RC changePageFillBit(RM_TableData *rel, int pageNum, bool bitVal) {
+  RC err;
+  BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
+  BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
+  if ((err = pinPage(bm, page, 0))) { // page zero contains the header
+    free(page);
+    return err;
+  }
+  int schemaLen = getSchemaStringLength(page->data);
+  int bitmapSize = PAGE_SIZE - schemaLen;
+  char *ptr;
+  if (bitmapSize && pageNum < bitmapSize * 8) {
+    ptr = page->data;
+    ptr += schemaLen;
+    if (bitVal) { // mark as full
+      setBit(ptr, pageNum);
+    }
+    else {
+      unsetBit(ptr, pageNum);
+    }
+    free(page);
+    return RC_OK;
+  }
+  // page bit is in page 1
+  if ((err = pinPage(bm, page, 1))) { // page one contains the rest of bitMap
+    free(page);
+    return err;
+  }
+  ptr = page->data;
+  int bitPos = pageNum - (bitmapSize * 8);
+  if (bitVal) { // mark as full
+    setBit(ptr, bitPos);
+  }
+  else {
+    unsetBit(ptr, bitPos);
+  }
+
+  free(page);
+  return RC_OK;
 }
 
 
@@ -520,8 +571,9 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done below
   int recordSize = getRecordSizeInBytes(rel->schema, true);
-  int pageNum, slotNum;
-  short totalSlots;
+  int pageNum = 0;
+  int slotNum = 0;
+  short totalSlots = 0;
   if ((err = getEmptyPage(rel, &pageNum))) {
     return err;
   }
@@ -538,7 +590,6 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   // TODO dont skip, and deal with slotNum
   if (true || slotNum < 0) { // means the nextSlot doesnot know where to write
     ptr = page->data + PAGE_HEADER_LEN;
-    printf("---OLD_BITS--- %d\n", (int)(unsigned char) ptr[0]);
     slotNum = getUnsetBitIndex(ptr, rel->slotsBitMapSize);
   }
 
@@ -546,14 +597,11 @@ RC insertRecord (RM_TableData *rel, Record *record) {
     // TODO THROW, it should not go over maxSlot
   }
 
-  printf("---SLOT--- %d\n", slotNum);
   ptr = page->data; // pointer to bytes array
   totalSlots++;
   memcpy(ptr, &totalSlots, sizeof(short)); // writing the totalSlots
-  printf("---NEW_TOTAL--- %d\n", totalSlots);
   ptr = page->data + PAGE_HEADER_LEN;
   setBit(ptr, slotNum); // setting the slot bits
-  printf("---NEW_BITS--- %d\n", (int)(unsigned char) ptr[0]);
   // TODO set the next free slot
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
   ptr = page->data + position;
@@ -566,9 +614,16 @@ RC insertRecord (RM_TableData *rel, Record *record) {
     free(page);
     return err;
   }
+  if (totalSlots >= rel->maxSlotsPerPage) {
+    if ((err = changePageFillBit(rel, pageNum - TABLE_HEADER_PAGES_LEN, true))) { // starting index from 0
+      free(page);
+      return err;
+    }
+  }
   free(page);
   record->id.page = pageNum;
   record->id.slot = slotNum;
+  printf("-------- INSERTING INTO PAGE %d AND SLOT %d\n", pageNum - 2, slotNum);
   return RC_OK;
 }
 
@@ -663,26 +718,19 @@ int main(int argc, char *argv[]) {
   recordRestored->id.page = 0;
   recordRestored->id.slot = 0;
   getRecord(rel, recordRestored->id, recordRestored);
-  printf("---------- %s\n", "recordRestored");
-  printRecord(rel->schema, recordRestored);
+//  printf("---------- %s\n", "recordRestored");
+//  printRecord(rel->schema, recordRestored);
 //  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
 //  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
-  printf("------------------------------------------------------------------------------------------\n");
   insertRecord(rel, recordRestored);
-  printf("------------------------------------------------------------------------------------------\n");
   insertRecord(rel, recordRestored);
-  printf("------------------------------------------------------------------------------------------\n");
   insertRecord(rel, recordRestored);
-  printf("------------------------------------------------------------------------------------------\n");
   insertRecord(rel, recordRestored);
-  printf("------------------------------------------------------------------------------------------\n");
   insertRecord(rel, recordRestored);
-  printf("------------------------------------------------------------------------------------------\n");
   insertRecord(rel, recordRestored);
-  printf("------------------------------------------------------------------------------------------\n");
   insertRecord(rel, recordRestored);
-  printf("------------------------------------------------------------------------------------------\n");
-  printf("%d\n", insertRecord(rel, recordRestored));
+  insertRecord(rel, recordRestored);
+  insertRecord(rel, recordRestored);
   closeTable(rel);
   deleteTable("shweelan");
 //  printf("1.3st schema : ");
