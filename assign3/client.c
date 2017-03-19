@@ -31,7 +31,7 @@ void processCommand(char *input) {
     if (strlen(token) > MAX_NAME - 1) {
       return showError("MAX EXCEEDED");
     }
-    char *tableName = newStr(MAX_NAME);
+    char *tableName = copyStr(token);
     printf("Enter number of attributes! (MAX=%d) : ", MAX_NUM_ATTR);
     scanf("%s", token);
     int numAttrs = (int) strtol(token, NULL, 10);
@@ -80,7 +80,7 @@ void processCommand(char *input) {
       printf("%d\n", err);
       return showError("SOMETHING WENT WRONG");
     }
-    printf("Table created!\n");
+    printf("Table `%s` created!\n", tableName);
   }
   else if (strcmp(input, "IR") == 0) {
     // TODO
