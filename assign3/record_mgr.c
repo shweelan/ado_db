@@ -608,14 +608,16 @@ RC insertRecord (RM_TableData *rel, Record *record) {
     exit(0);
   }
 
-
-  totalSlots++;
-  memcpy(page->data, &totalSlots, sizeof(short)); // writing the totalSlots
-  setBit(ptr, slotNum); // setting the slot bit
   int recordSize = rel->recordByteSize;
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
   ptr = page->data + position;
   memcpy(ptr, record->data, recordSize);
+
+  ptr = page->data + PAGE_HEADER_LEN;
+  totalSlots++;
+  memcpy(page->data, &totalSlots, sizeof(short)); // writing the totalSlots
+  setBit(ptr, slotNum); // setting the slot bit
+  printf("---- TRACE ---- INSERT RECORD TO TABLE : %s, AT SLOT : %d.%d,  TOTAL : %d, EQUIVILANT_BYTE : %d\n", rel->name, pageNum, slotNum, totalSlots, position);
   //printf("---- DATA_PAGE ------ %s\n", page->data);
   //printf("$$$$$$$$ %d of %d\n", totalSlots, rel->maxSlotsPerPage);
   if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
@@ -684,6 +686,7 @@ RC deleteRecord (RM_TableData *rel, RID id) {
   memcpy(&totalSlots, ptr, sizeof(short)); // may use later
   totalSlots--;
   memcpy(ptr, &totalSlots, sizeof(short));
+  printf("---- TRACE ---- DELETE RECORD FROM TABLE : %s, AT SLOT : %d.%d, TOTAL : %d\n", rel->name, pageNum, slotNum, totalSlots);
   if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
     return err;
   }
