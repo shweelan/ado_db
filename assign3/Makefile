@@ -1,5 +1,15 @@
-run: test_assign3_1.o rm_serializer.o record_mgr.o dberror.o storage_mgr.o buffer_mgr.o data_structures.o expr.o
-	gcc -o bin/run bin/*.o
+all: run1 run2
+
+run1: test_assign3_1.o rm_serializer.o record_mgr.o dberror.o storage_mgr.o buffer_mgr.o data_structures.o expr.o
+	gcc -o bin/test_assign/run bin/test_assign3_1.o bin/rm_serializer.o bin/record_mgr.o bin/dberror.o bin/storage_mgr.o bin/buffer_mgr.o bin/data_structures.o bin/expr.o
+
+run2: test_expr.o rm_serializer.o record_mgr.o dberror.o storage_mgr.o buffer_mgr.o data_structures.o expr.o
+	gcc -o bin/test_expr/run bin/test_expr.o bin/rm_serializer.o bin/record_mgr.o bin/dberror.o bin/storage_mgr.o bin/buffer_mgr.o bin/data_structures.o bin/expr.o
+
+
+test_expr.o: test_expr.c dberror.h expr.h record_mgr.h tables.h test_helper.h
+	gcc -c test_expr.c -o bin/test_expr.o
+
 
 test_assign3_1.o: test_assign3_1.c dberror.h expr.h record_mgr.h tables.h test_helper.h
 	gcc -c test_assign3_1.c -o bin/test_assign3_1.o
@@ -28,3 +38,7 @@ data_structures.o: data_structures.c data_structures.h dt.h
 
 dberror.o: dberror.c dberror.h
 	gcc -c dberror.c -o bin/dberror.o
+
+
+clean:
+	-rm bin/*.o bin/test_assign/run bin/test_expr/run
