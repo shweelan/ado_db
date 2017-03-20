@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
 #include "record_mgr.h"
 #include "dberror.h"
 #include "const.h"
@@ -8,6 +9,7 @@
 #define MAX_NAME 256
 #define MAX_NUM_ATTR 16
 #define MAX_STRING 7000
+#define MAX_NAME_ATTEMPTS 5
 
 
 char *copyStr(char *_string) {
@@ -21,16 +23,42 @@ void showError(char *msg) {
   printf("ERROR! : %s!\n", msg);
 }
 
+int validateName(char *str) {
+  str[0] = tolower(str[0]);
+  if (str[0] < 97 || str[0] > 122) {
+    return -1;
+  }
+  for(int i = 1; str[i]; i++) {
+    if (i >= MAX_NAME - 1) {
+      return -1;
+    }
+    str[i] = tolower(str[i]);
+    if (str[i] == ',') {
+      return -1;
+    }
+  }
+  return 0;
+}
+
+void getName(char *token) {
+  while (true) {
+    scanf("%s", token);
+    if (validateName(token) == -1) {
+      showError("NAMES MUST NOT EXCEED THE MAX! NAMES MUST START WITH LETTER! NAMES MUST NOT CONTAIN `,`!");
+      printf("Please try again : ");
+      continue;
+    }
+    break;
+  }
+}
+
 
 void processCommand(char *input) {
   RC err;
   if (strcmp("CT", input) == 0) {
     char *token = newStr(PAGE_SIZE);
     printf("Enter table name! (MAX_LEN=%d) : ", MAX_NAME - 1); // -1 for \0 terminator
-    scanf("%s", token);
-    if (strlen(token) > MAX_NAME - 1) {
-      return showError("MAX EXCEEDED");
-    }
+    getName(token);
     char *tableName = copyStr(token);
     printf("Enter number of attributes! (MAX=%d) : ", MAX_NUM_ATTR);
     scanf("%s", token);
@@ -47,10 +75,7 @@ void processCommand(char *input) {
     for (i = 0; i < numAttrs; i++) {
       printf("Building attribute#%d!\n", i);
       printf("\tEnter attribute#%d name! (MAX_LEN=%d) : ", i, MAX_NAME - 1);
-      scanf("%s", token);
-      if (strlen(token) > MAX_NAME - 1) {
-        return showError("MAX EXCEEDED");
-      }
+      getName(token);
       attrNames[i] = copyStr(token);
       printf("\tEnter attribute#%d type! [0 : INT, 1 : STRING, 2 : FLOAT, 3 : BOOL] : ", i);
       scanf("%s", token);
