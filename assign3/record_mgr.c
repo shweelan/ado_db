@@ -617,9 +617,6 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   totalSlots++;
   memcpy(page->data, &totalSlots, sizeof(short)); // writing the totalSlots
   setBit(ptr, slotNum); // setting the slot bit
-  printf("---- TRACE ---- INSERT RECORD TO TABLE : %s, AT SLOT : %d.%d,  TOTAL : %d, EQUIVILANT_BYTE : %d\n", rel->name, pageNum, slotNum, totalSlots, position);
-  //printf("---- DATA_PAGE ------ %s\n", page->data);
-  //printf("$$$$$$$$ %d of %d\n", totalSlots, rel->maxSlotsPerPage);
   if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
     return err;
   }
@@ -631,8 +628,6 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   }
   record->id.page = pageNum;
   record->id.slot = slotNum;
-  //printf("-------- INSERTING INTO SLOT %d.%d on byte %d \n", pageNum, slotNum, position);
-  //printRecord(rel->schema, record);
   return RC_OK;
 }
 
@@ -657,7 +652,6 @@ RC getRecord (RM_TableData *rel, RID id, Record *record) {
   int position = PAGE_HEADER_LEN + rel->slotsBitMapSize + (recordSize * slotNum);
   ptr = page->data; // pointer to bytes array
   ptr += position;
-  //printf("reading file %s, slot %d.%d, from byte %d => '%c'\n", rel->name, pageNum, slotNum, position, ptr[0]);
   memcpy(record->data, ptr, recordSize);
   return atomicUnpinPage(bm, page, false); // false for not markDirty
 }
@@ -686,7 +680,6 @@ RC deleteRecord (RM_TableData *rel, RID id) {
   memcpy(&totalSlots, ptr, sizeof(short)); // may use later
   totalSlots--;
   memcpy(ptr, &totalSlots, sizeof(short));
-  printf("---- TRACE ---- DELETE RECORD FROM TABLE : %s, AT SLOT : %d.%d, TOTAL : %d\n", rel->name, pageNum, slotNum, totalSlots);
   if ((err = atomicUnpinPage(bm, page, true))) { // true for markDirty
     return err;
   }
@@ -774,122 +767,4 @@ RC closeScan (RM_ScanHandle *scan) {
   ScanMgmtInfo *smi = (ScanMgmtInfo *)(scan->mgmtData);
   free(smi);
 	return RC_OK;
-}
-
-
-int _main(int argc, char *argv[]) {
-  int a = 4;
-  char **b = newArray(char *, a);
-  b[0] = "SH";
-  b[1] = "WE";
-  b[2] = "EL";
-  b[3] = "AN";
-  DataType *c = newArray(DataType, a);
-  c[0] = DT_STRING;
-  c[1] = DT_INT;
-  c[2] = DT_BOOL;
-  c[3] = DT_FLOAT;
-  int *d = newIntArr(a);
-  d[0] = 1000;
-  d[1] = 0;
-  d[2] = 0;
-  d[3] = 0;
-  int e = 2;
-  int *f = newIntArr(e);
-  f[0] = 1;
-  f[1] = 3;
-  printf("\n\n");
-  initRecordManager(NULL);
-  Schema *s = createSchema(a, b, c, d, e, f);
-  printf("1.1st schema : ");
-  printSchema(s);
-//  printf("1.1st schema string : %s\n", stringifySchema(s));
-//  printf("1.1st schema record size : %d\n\n", getRecordSize(s));
-  printf("------------------------------------------------------------------------------------------\n");
-  Record *record;
-  createRecord(&record, s);
-  Value *val = new(Value);
-  val->dt = DT_STRING;
-  val->v.stringV = copyString("56fs.58274283748237483278947238947932874fkdjshfjhsdjh sejkhfksnkchsfclalcbaewfgaewkkcaew");
-  setAttr(record, s, 0, val);
-  free(val->v.stringV);
-  val->dt = DT_INT;
-  val->v.intV = 65;
-  setAttr(record, s, 1, val);
-  val->dt = DT_BOOL;
-  val->v.boolV = true;
-  setAttr(record, s, 2, val);
-  val->dt = DT_FLOAT;
-  val->v.floatV = 56.56;
-  setAttr(record, s, 3, val);
-  printf("---------- %s\n", "record");
-  printRecord(s, record);
-  printf("------------------------------------------------------------------------------------------\n");
-//  printf("1.2st schema : ");
-//  printSchema(s);
-//  printf("1.2st schema string : %s\n", stringifySchema(s));
-//  printf("1.2st schema record size : %d\n\n", getRecordSize(s));
-//  printf("------------------------------------------------------------------------------------------\n");
-  createTable("shweelan", s);
-  RM_TableData *rel = new(RM_TableData);
-  openTable(rel, "shweelan");
-//  printf("rel.1 schema : ");
-//  printSchema(rel->schema);
-  insertRecord(rel, record);
-  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
-  val->dt = DT_STRING;
-  val->v.stringV = copyString("56fs473472jhfsdhfsdljfdnfds ksdhkf sdfl dskhskjh ksd fksnkchsfclalcbaewfgaewkkcaew");
-  setAttr(record, s, 0, val);
-  free(val->v.stringV);
-  free(val);
-  updateRecord(rel, record);
-  Record *recordRestored;
-  createRecord(&recordRestored, s);
-  getRecord(rel, record->id, recordRestored);
-  printf("---------- %s\n", "recordRestored");
-  printRecord(rel->schema, recordRestored);
-//  printf("rel.1 schema string : %s\n", stringifySchema(rel->schema));
-//  printf("rel.1 schema record size : %d\n\n", getRecordSize(rel->schema));
-  printf("deleteing record %d.%d err#%d\n", record->id.page, record->id.slot , deleteRecord(rel, record->id));
-  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
-  printf("getting record %d.%d err#%d\n", record->id.page, record->id.slot , getRecord(rel, record->id, recordRestored));
-  insertRecord(rel, recordRestored);
-  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
-  insertRecord(rel, recordRestored);
-  insertRecord(rel, recordRestored);
-  insertRecord(rel, recordRestored);
-  insertRecord(rel, recordRestored);
-  insertRecord(rel, recordRestored);
-  insertRecord(rel, recordRestored);
-  insertRecord(rel, recordRestored);
-  insertRecord(rel, recordRestored);
-  insertRecord(rel, recordRestored);
-  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
-  insertRecord(rel, recordRestored);
-  printf("#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$#$$##$#$#$#$#$#$#$#$#$#$ num of tuples %d\n", getNumTuples(rel));
-  closeTable(rel);
-  deleteTable("shweelan");
-//  printf("1.3st schema : ");
-//  printSchema(s);
-//  char *ss = stringifySchema(s);
-//  printf("1.3st schema string : %s\n", ss);
-//  printf("1.3st schema record size : %d\n\n", getRecordSize(s));
-//  printf("------------------------------------------------------------------------------------------\n");
-//  Schema *ns = parseSchema(ss);
-//  printf("2.1nd schema : ");
-//  printSchema(ns);
-//  char *nss = stringifySchema(ns);
-//  printf("2.1nd schema string : %s\n", nss);
-//  printf("2.1nd schema record size : %d\n\n", getRecordSize(ns));
-//  printf("------------------------------------------------------------------------------------------\n");
-//  printf("\n");
-//  freeSchema(s);
-//  freeSchema(ns);
-//  free(ss);
-//  free(nss);
-  free(b);
-  free(c);
-  free(d);
-  free(f);
-  return 0;
 }

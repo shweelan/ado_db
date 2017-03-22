@@ -123,6 +123,7 @@ RC closePageFile (SM_FileHandle *fHandle) {
     return RC_FILE_HANDLE_NOT_INIT;
   }
   int ret = close(getFd(fHandle));
+  free(fHandle->mgmtInfo);
   if (ret == -1) {
     return RC_FS_ERROR;
   }
