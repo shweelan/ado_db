@@ -8,7 +8,7 @@
 // Initialize the frame.
 PageFrameInfo * initFrame() {
   PageFrameInfo *frame = malloc(sizeof(PageFrameInfo));
-  frame->pageData = malloc(sizeof(char) * PAGE_SIZE); // TODO free it .. Done in destroyFrame
+  frame->pageData = calloc(PAGE_SIZE, sizeof(char)); // TODO free it .. Done in destroyFrame
   frame->pageNum = NO_PAGE;
   frame->fixCount = 0;
   frame->dirty = false;
