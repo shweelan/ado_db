@@ -12,7 +12,7 @@
 #define DELIMITER ((char *) ",")
 
 /* Per table buffer size */
-#define PER_TBL_BUF_SIZE 100 // TMP
+#define PER_TBL_BUF_SIZE 10
 
 /* Page header length */
 #define PAGE_HEADER_LEN 11
