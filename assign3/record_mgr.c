@@ -757,8 +757,10 @@ RC next (RM_ScanHandle *scan, Record *record) {
     return err;
   }
 	if (val->v.boolV == 1) {
+    free(val);
     return RC_OK;
   }
+  free(val);
   return next(scan, record);
 }
 
