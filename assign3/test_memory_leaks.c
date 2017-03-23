@@ -84,8 +84,11 @@ int main(int argc, char *argv[]) {
   free(f);
   free(tableName);
   shutdownRecordManager();
+  free(right->expr.op);
   free(right);
   free(left);
+  free(se1->expr.op->args);
+  free(se1->expr.op);
   free(se1);
   return 0;
 }
