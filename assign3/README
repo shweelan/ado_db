@@ -1,0 +1,118 @@
+==========================================================================================
+CS-525 Assignment 3
+==========================================================================================
+Project Team
+————————————-
+Shweelan Samson
+Akshatha Kadri
+Ahmed Sayed
+==========================================================================================
+
+The implementation for the record manager is complete and present in the file record_mgr.c. There is a client packaged along with the client and additional test file to check for memory leakage. “Make” file contains all the necessary instruction to compile and run the application. The user interface is present in the file “client.c” and additional test case for memory is present in the file “test_memory_leaks.c” and can be run directly using appropriate main functions. 
+
+====================================================================================
+Interactive client
+====================================================================================
+
+Features
+	==> Create table, Insert record, Get record, Update record, Delete record, Scan Table, Delete table
+	==> Previous table name saved for quick access
+	==> update prompts current state of table and provides option to change every column value or skip the change for columns.
+
+1. Run client.c
+
+2. There are 7 options displayed.(Not in the same order) 
+	CT	—> Create table
+	IR	-> Insert record
+	GR	-> Get record
+	UR	-> Update record
+	DR	-> Delete record
+	ST	-> Scan Table
+	DT	-> Delete table
+	
+
+3. Some Example Sequential runs are: 
+	———————————————————
+	CT
+	Ak
+	2
+	id
+	0
+	name
+	1
+	100
+			Table created
+	———————————————————
+	IR
+	<Enter>		We save previously entered table name for ease or type table name <Ak>
+	11
+	ourdbisbest
+			Record inserted (Note the <record id>: mostly it will be <0.0>)
+	———————————————————
+	GR
+	<Enter>
+	0.0
+			Record displayed
+	———————————————————
+	UR
+	<Enter>
+	0.0
+	22
+	<Enter>		We provide processing of <Enter> - means no change in the value for update
+			Record Updated
+	———————————————————
+	GR
+	<Enter>
+	0.0
+			Record displayed - See changes
+	———————————————————
+	DR
+	<Enter>
+	0.0
+			Record deleted
+	———————————————————
+	GR
+	<Enter>
+	0.0
+			Error displayed
+	———————————————————
+	DT
+	<Enter>
+			Table deleted
+	———————————————————
+
+====================================================================================	
+CONFIGURE Memory Leaks Check
+====================================================================================
+1. Open X-code -> new project -> commandLine
+
+2. Add the files in assignment3 to the X-code by right click on project and select “Add files to ..” 
+	except the test files and client.c (main function conflicts)
+
+3. Place a debug point at Line 12 and Line 87
+
+4. Open instruments ( an easy way is —> Run test_memory_leaks.c -> On the left panel, click on Memory. When the window opens, click on “Profile in instruments”. 
+
+5. Run the c program and note the processed displayed in the left panel. The program should stop at the first debug point.
+
+6. Go to Instruments and click on record. Select the process with the process id we noted in previous step.
+
+7. Now click resume.
+
+8. Check for any leaks in the program.
+
+The second debug is at 87 to exclude memory leaks due to the existing Expr. To see the memory leak that happens due to Expr, keep a debug at “return 0” and resume the function.
+
+====================================================================================
+Make DIR and Run
+====================================================================================
+1. Create a new directory to store files.
+
+2. To run it, execute the following commands
+
+        $ make
+        $./bin/test_assign/run
+        $./bin/test_expr/run
+	$./bin/test_client/run		- CLIENT!
+	$./bin/test_memory_leaks/run	— This has to be tested via X-Code Instruments -Leaks
+
