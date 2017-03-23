@@ -49,6 +49,5 @@ data_structures.o: data_structures.c data_structures.h dt.h
 dberror.o: dberror.c dberror.h
 	gcc -c dberror.c -o bin/dberror.o
 
-
 clean:
 	-rm bin/*.o bin/test_assign/run bin/test_expr/run bin/test_client/run
