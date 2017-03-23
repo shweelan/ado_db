@@ -202,7 +202,7 @@ Expr *makeLOpExpr(Expr *left, Expr *right, char *lop) {
 
 Expr *parseExpressions(Schema *schema) {
   char *token = newCharArr(PAGE_SIZE);
-  getInput("Input expression : ", token, PAGE_SIZE, false);
+  getInput("Input expression, empty for full scan : ", token, PAGE_SIZE, false);
   int i = 0;
   int j = 0;
   bool isStringExpr = false;
@@ -366,9 +366,9 @@ void populateRecord(RM_TableData *rel, char* tableName, Record *record, bool isU
     }
     char * displayStr = malloc(1000);
     if(isUpdate){
-      sprintf(displayStr, "Enter the value for %s, press enter to skip :", attrNames[i]);
+      sprintf(displayStr, "Enter the value for %s, press enter to skip : ", attrNames[i]);
     } else {
-      sprintf(displayStr, "Enter the value for %s:", attrNames[i]);
+      sprintf(displayStr, "Enter the value for %s: ", attrNames[i]);
     }
     token=newStr(PAGE_SIZE);
     int skip = getInput(displayStr, token, len, false);
