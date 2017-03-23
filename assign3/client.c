@@ -242,6 +242,13 @@ Expr *parseExpressions(Schema *schema) {
       expr[j++] = c;
     }
   }
+  Expr *l1, *r1, *term1, *final;
+  if (numExprs == 0) {
+    l1 = makeExpr("true", schema);
+    r1 = makeExpr("true", schema);
+    final = makeOpExpr(l1, r1, "=");
+    return final;
+  }
   expr[j] = '\0';
   exprsTokens[numExprs++] = copyStr(expr);
   free(token);
@@ -253,7 +260,6 @@ Expr *parseExpressions(Schema *schema) {
     return NULL;
   }
 
-  Expr *l1, *r1, *term1, *final;
   if ((l1 = makeExpr(exprsTokens[0], schema)) == NULL) {
     for (i = 0; i < numExprs; i++) {
       free(exprsTokens[i]);

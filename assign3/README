@@ -8,7 +8,11 @@ Akshatha Kadri
 Ahmed Sayed
 ==========================================================================================
 
-The implementation for the record manager is complete and present in the file record_mgr.c. There is a client packaged along with the client and additional test file to check for memory leakage. “Make” file contains all the necessary instruction to compile and run the application. The user interface is present in the file “client.c” and additional test case for memory is present in the file “test_memory_leaks.c” and can be run directly using appropriate main functions. 
+The implementation for the record manager is complete and present in the file record_mgr.c.
+There is a client packaged along with the client and additional test file to check for memory leakage.
+“Makefile” contains all the necessary instruction to compile and run the application.
+The user interface is present in the file “client.c”
+and additional test case for memory is present in the file “test_memory_leaks.c” and can be run directly using appropriate main functions.
 
 ====================================================================================
 Interactive client
@@ -21,7 +25,7 @@ Features
 
 1. Run client.c
 
-2. There are 7 options displayed.(Not in the same order) 
+2. There are 7 options displayed.(Not in the same order)
 	CT	—> Create table
 	IR	-> Insert record
 	GR	-> Get record
@@ -29,9 +33,9 @@ Features
 	DR	-> Delete record
 	ST	-> Scan Table
 	DT	-> Delete table
-	
 
-3. Some Example Sequential runs are: 
+
+3. Some Example Sequential runs are:
 	———————————————————
 	CT
 	Ak
@@ -81,17 +85,17 @@ Features
 			Table deleted
 	———————————————————
 
-====================================================================================	
+====================================================================================
 CONFIGURE Memory Leaks Check
 ====================================================================================
 1. Open X-code -> new project -> commandLine
 
-2. Add the files in assignment3 to the X-code by right click on project and select “Add files to ..” 
+2. Add the files in assignment3 to the X-code by right click on project and select “Add files to ..”
 	except the test files and client.c (main function conflicts)
 
 3. Place a debug point at Line 12 and Line 87
 
-4. Open instruments ( an easy way is —> Run test_memory_leaks.c -> On the left panel, click on Memory. When the window opens, click on “Profile in instruments”. 
+4. Open instruments ( an easy way is —> Run test_memory_leaks.c -> On the left panel, click on Memory. When the window opens, click on “Profile in instruments”.
 
 5. Run the c program and note the processed displayed in the left panel. The program should stop at the first debug point.
 
@@ -115,4 +119,3 @@ Make DIR and Run
         $./bin/test_expr/run
 	$./bin/test_client/run		- CLIENT!
 	$./bin/test_memory_leaks/run	— This has to be tested via X-Code Instruments -Leaks
-
