@@ -1,6 +1,5 @@
 all: run1 run2 run3
 
-
 run1: test_assign3_1.o rm_serializer.o record_mgr.o dberror.o storage_mgr.o buffer_mgr.o data_structures.o expr.o
 	gcc -o bin/test_assign/run bin/test_assign3_1.o bin/rm_serializer.o bin/record_mgr.o bin/dberror.o bin/storage_mgr.o bin/buffer_mgr.o bin/data_structures.o bin/expr.o
 
