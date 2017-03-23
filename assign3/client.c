@@ -40,7 +40,7 @@ int validateName(char *str) {
       return -1;
     }
     str[i] = tolower(str[i]);
-    if (str[i] == ',') {
+    if (str[i] == ',' || str[i] == ' ') {
       return -1;
     }
   }
@@ -51,7 +51,7 @@ void getName(char *token) {
   while (true) {
     scanf("%s", token);
     if (validateName(token) == -1) {
-      showError("NAMES MUST NOT EXCEED THE MAX! NAMES MUST START WITH LETTER! NAMES MUST NOT CONTAIN `,`!");
+      showError("NAMES MUST NOT EXCEED THE MAX! NAMES MUST START WITH LETTER! NAMES MUST NOT CONTAIN `,` OR SPACES");
       printf("Please try again : ");
       continue;
     }
@@ -75,10 +75,241 @@ int getInput(char* displayString, char* token, int size, bool validate){
         return STR_INVALID;
       }
     }
-  }else {
+  }
+  else {
     return STR_TOO_LONG;
   }
   return STR_OK;
+}
+
+char getType(char *str) {
+  if (strcmp(str, "true") == 0) {
+    return 't'; // bool true
+  }
+  if (strcmp(str, "false") == 0) {
+    return 'f'; // bool false, f is used for float
+  }
+  char *ep = NULL;
+  long i = strtol(str, &ep, 10);
+  if (!*ep) {
+    return 'i'; // int
+  }
+  ep = NULL;
+  double f = strtod (str, &ep);
+  if (!ep  ||  *ep) {
+    return 's'; // string
+  }
+  return 'p'; // float point
+}
+
+int getAttrPostionByName(Schema *schema, char *name) {
+  for (int i = 0; i < schema->numAttr; i++) {
+    if (strcmp(schema->attrNames[i], name) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+
+Expr *makeExpr(char *exprString, Schema *schema) {
+  Expr *expr = NULL;
+  char *stringValue = newCharArr(PAGE_SIZE);
+  char type = getType(exprString);
+  int len;
+  switch (type) {
+    case 'i':
+      sprintf(stringValue, "i%d", (int) strtol(exprString, NULL, 10));
+      MAKE_CONS(expr, stringToValue(stringValue));
+      break;
+    case 'p':
+      sprintf(stringValue, "f%f", (float) strtod(exprString, NULL));
+      MAKE_CONS(expr, stringToValue(stringValue));
+      break;
+    case 't':
+    case 'f':
+      sprintf(stringValue, "b%c", type);
+      MAKE_CONS(expr, stringToValue(stringValue));
+      break;
+    case 's':
+      len = strlen(exprString);
+      if (exprString[0] == '\"' && exprString[len - 1] == '\"') {
+        exprString[len - 1] = '\0';
+        sprintf(stringValue, "b%s", (exprString + 1));
+        MAKE_CONS(expr, stringToValue(stringValue));
+      } else {
+        int idx = getAttrPostionByName(schema, exprString);
+        if (idx >= 0) {
+          MAKE_ATTRREF(expr, idx);
+        }
+      }
+      break;
+  }
+  free(stringValue);
+  return expr;
+}
+
+Expr *makeOpExpr(Expr *left, Expr *right, char *op) {
+  Expr *expr = NULL;
+  Expr *tmp1 = NULL;
+  Expr *tmp2 = NULL;
+  if (strcmp(op, "=") == 0) {
+    MAKE_BINOP_EXPR(expr, left, right, OP_COMP_EQUAL);
+    return expr;
+  }
+  if (strcmp(op, "<") == 0) {
+    MAKE_BINOP_EXPR(expr, left, right, OP_COMP_SMALLER);
+    return expr;
+  }
+  if (strcmp(op, ">") == 0) {
+    MAKE_BINOP_EXPR(expr, right, left, OP_COMP_SMALLER);
+    return expr;
+  }
+  if (strcmp(op, ">=") == 0) {
+    MAKE_BINOP_EXPR(tmp1, right, left, OP_COMP_SMALLER);
+    MAKE_BINOP_EXPR(tmp2, left, right, OP_COMP_EQUAL);
+    MAKE_BINOP_EXPR(expr, tmp1, tmp2, OP_BOOL_OR);
+    return expr;
+  }
+  if (strcmp(op, "<=") == 0) {
+    MAKE_BINOP_EXPR(tmp1, left, right, OP_COMP_SMALLER);
+    MAKE_BINOP_EXPR(tmp2, left, right, OP_COMP_EQUAL);
+    MAKE_BINOP_EXPR(expr, tmp1, tmp2, OP_BOOL_OR);
+    return expr;
+  }
+  if (strcmp(op, "!=") == 0) {
+    MAKE_BINOP_EXPR(tmp1, left, right, OP_COMP_EQUAL);
+    MAKE_UNOP_EXPR(expr, tmp1, OP_BOOL_NOT);
+    return expr;
+  }
+  return expr;
+}
+
+
+Expr *makeLOpExpr(Expr *left, Expr *right, char *lop) {
+  Expr *expr = NULL;
+  if (strcmp(lop, "&") == 0) {
+    MAKE_BINOP_EXPR(expr, left, right, OP_BOOL_AND);
+    return expr;
+  }
+  if (strcmp(lop, "|") == 0) {
+    MAKE_BINOP_EXPR(expr, left, right, OP_BOOL_OR);
+    return expr;
+  }
+  return expr;
+}
+
+
+Expr *parseExpressions(Schema *schema) {
+  char *token = newCharArr(PAGE_SIZE);
+  getInput("Input expression : ", token, PAGE_SIZE, false);
+  int i = 0;
+  int j = 0;
+  bool isStringExpr = false;
+  char c;
+  char *expr = newCharArr(PAGE_SIZE);
+  char *exprsTokens[7]; // max 2 boolean terms each. e.g a > 5 & s <= 6
+  int numExprs = 0;
+  for (i = 0; (c = token[i]); i++) {
+    if (!isStringExpr) {
+      if(c == ' ') {
+        continue;
+      }
+      c = tolower(c);
+    }
+    if (!isStringExpr && (c == ' ' || c == '>' || c == '=' || c == '<' || c == '!' || c == '&' || c == '|')) {
+      expr[j] = '\0';
+      exprsTokens[numExprs++] = copyStr(expr);
+      j = 0;
+      if (c != ' ') {
+        expr[j++] = c; // taking ops as expressions
+        if (c == '>' || c == '<' || c == '!') {
+          c = token[i + 1];
+          if (c == '=') {
+            expr[j++] = c;
+            i++;
+          }
+        }
+        expr[j] = '\0';
+        j = 0;
+        exprsTokens[numExprs++] = copyStr(expr);
+      }
+    }
+    else {
+      if (c == '\"') {
+        isStringExpr = abs(isStringExpr - 1); // toogle
+      }
+      expr[j++] = c;
+    }
+  }
+  expr[j] = '\0';
+  exprsTokens[numExprs++] = copyStr(expr);
+  free(token);
+  free(expr);
+  if (numExprs != 3 && numExprs != 7) {
+    for (i = 0; i < numExprs; i++) {
+      free(exprsTokens[i]);
+    }
+    return NULL;
+  }
+
+  Expr *l1, *r1, *term1, *final;
+  if ((l1 = makeExpr(exprsTokens[0], schema)) == NULL) {
+    for (i = 0; i < numExprs; i++) {
+      free(exprsTokens[i]);
+    }
+    return NULL;
+  }
+  if ((r1 = makeExpr(exprsTokens[2], schema)) == NULL) {
+    for (i = 0; i < numExprs; i++) {
+      free(exprsTokens[i]);
+    }
+    return NULL;
+  }
+
+  if ((term1 = makeOpExpr(l1, r1, exprsTokens[1])) == NULL) {
+    for (i = 0; i < numExprs; i++) {
+      free(exprsTokens[i]);
+    }
+    return NULL;
+  }
+
+  final = term1;
+
+  if (numExprs == 7) {
+    Expr *l2, *r2, *term2 = NULL;
+    if ((l2 = makeExpr(exprsTokens[4], schema)) == NULL) {
+      for (i = 0; i < numExprs; i++) {
+        free(exprsTokens[i]);
+      }
+      return NULL;
+    }
+    if ((r2 = makeExpr(exprsTokens[6], schema)) == NULL) {
+      for (i = 0; i < numExprs; i++) {
+        free(exprsTokens[i]);
+      }
+      return NULL;
+    }
+
+    if ((term2 = makeOpExpr(l2, r2, exprsTokens[5])) == NULL) {
+      for (i = 0; i < numExprs; i++) {
+        free(exprsTokens[i]);
+      }
+      return NULL;
+    }
+    if ((final = makeLOpExpr(term1, term2, exprsTokens[3])) == NULL) {
+      for (i = 0; i < numExprs; i++) {
+        free(exprsTokens[i]);
+      }
+      return NULL;
+    }
+  }
+
+
+  for (i = 0; i < numExprs; i++) {
+    free(exprsTokens[i]);
+  }
+  return final;
 }
 
 
@@ -91,14 +322,15 @@ char* getTableName(char* lastTableName, bool validate){
   }else {
     sprintf(displayStr, "Enter table name! (MAX_LEN=%d) : ", MAX_NAME - 1); // -1 for \0 terminator
   }
-  
+
   int str = getInput(displayStr, token, MAX_NAME, validate);
   if (str == STR_TOO_LONG) {
     showError("MAX EXCEEDED");
   }else if(str==STR_EMPTY){
     tableName = copyStr(lastTableName);
   } else if(str==STR_INVALID){
-    showError("NAMES MUST NOT EXCEED THE MAX! NAMES MUST START WITH LETTER! NAMES MUST NOT CONTAIN `,`! \nPlease try again : ");
+    showError("NAMES MUST NOT EXCEED THE MAX! NAMES MUST START WITH LETTER! NAMES MUST NOT CONTAIN `,` OR SPACES");
+    printf("Please try again : ");
   } else{
     tableName = copyStr(token);
   }
@@ -112,7 +344,7 @@ void populateRecord(RM_TableData *rel, char* tableName, Record *record, bool isU
   DataType * datatype = rel->schema->dataTypes;
   char ** attrNames = rel->schema->attrNames;
   int* typeLen = rel->schema->typeLength;
-  
+
   if(isUpdate){
     printf("\n-----------------------------------");
     printf("\nCurrent record values are: \n");
@@ -120,11 +352,11 @@ void populateRecord(RM_TableData *rel, char* tableName, Record *record, bool isU
     printRecord(rel->schema, record);
     printf("-----------------------------------\n");
   }
-  
+
   for (int i=0; i<rel->schema->numAttr;i++){
-    int len = typeLen[i];
-    if(len == 0){
-      len = 4;
+    int len = PAGE_SIZE;
+    if(datatype[i] == DT_STRING){
+      len = typeLen[i];
     }
     char * displayStr = malloc(1000);
     if(isUpdate){
@@ -145,7 +377,7 @@ void populateRecord(RM_TableData *rel, char* tableName, Record *record, bool isU
         val->v.intV = atoi(token);
         setAttr(record, rel->schema, i, val);
         break;
-        
+
       case DT_FLOAT:
         val->dt = DT_FLOAT;
         val->v.floatV = atof(token);
@@ -153,7 +385,11 @@ void populateRecord(RM_TableData *rel, char* tableName, Record *record, bool isU
         break;
       case DT_BOOL:
         val->dt = DT_BOOL;
-        val->v.boolV = (strcmp(token,"1")==0)?true:false;
+        char *ptr;
+        while (ptr) {
+          ptr[0] = tolower(ptr[0]);
+        }
+        val->v.boolV = (strcmp(token,"0") == 0 || strcmp(token, "false") == 0) ? false : true;
         setAttr(record, rel->schema, i, val);
         break;
       case DT_STRING:
@@ -180,7 +416,7 @@ void processCommand(char *input, char * lastTableName) {
     char *token = newStr(PAGE_SIZE);
     sprintf(displayStr,"Enter number of attributes! (MAX=%d) : ", MAX_NUM_ATTR);
     str = getInput(displayStr, token, 10, false);
-    
+
     int numAttrs = (int) strtol(token, NULL, 10);
     if (numAttrs > MAX_NUM_ATTR) {
       return showError("MAX EXCEEDED");
@@ -196,7 +432,7 @@ void processCommand(char *input, char * lastTableName) {
       sprintf(displayStr, "\tEnter attribute#%d name! (MAX_LEN=%d) : ", i, MAX_NAME - 1);
       str = getInput(displayStr, token, MAX_NAME, true);
       if(str==STR_INVALID){
-        showError("NAMES MUST NOT EXCEED THE MAX! NAMES MUST START WITH LETTER! NAMES MUST NOT CONTAIN `,`!");
+        showError("NAMES MUST NOT EXCEED THE MAX! NAMES MUST START WITH LETTER! NAMES MUST NOT CONTAIN `,` OR SPACES");
         printf("Please try again : ");
         return;
       }
@@ -233,7 +469,7 @@ void processCommand(char *input, char * lastTableName) {
       printf("Table `%s` created!\n", tableName);
       memcpy(lastTableName, tableName, MAX_NAME);
     }
-    
+
     free(tableName);
     free(attrNames);
     free(token);
@@ -257,17 +493,17 @@ void processCommand(char *input, char * lastTableName) {
   else if (strcmp(input, "DR") == 0) {
     char* tableName= getTableName(lastTableName, false);
     RM_TableData *rel = new(RM_TableData);
-    
+
     int rc = openTable(rel, tableName);
     if(rc != RC_OK) {
       showError("UNKNOWN TABLE!");
     } else {
       char *token = newStr(PAGE_SIZE);
-      
+
       sprintf(displayStr,"Enter RID for record deletion! : "); // -1 for \0 terminator
       getInput(displayStr, token, 10, false);
       //scanf("%s", token);
-      
+
       RID *rid= new(RID);;
       char *temp1= malloc(30);
       char *temp2= malloc(30);
@@ -308,11 +544,11 @@ void processCommand(char *input, char * lastTableName) {
 
     Record *record = new(Record);
     createRecord(&record, rel->schema);
-    
+
     sprintf(displayStr,"Enter RID for record updation! : "); // -1 for \0 terminator
     getInput(displayStr, token, 10, false);
     //scanf("%s", token);
-    
+
     RID *rid= new(RID);
     char *temp1= malloc(30);
     char *temp2= malloc(30);
@@ -335,11 +571,11 @@ void processCommand(char *input, char * lastTableName) {
     if(rc != RC_OK) {
       return showError("Record doesnot exist!\n");
     }
-    
+
     populateRecord(rel, tableName, record, true);
-    
+
     rc= updateRecord(rel, record);
-    
+
     if(rc != RC_OK) {
       showError("Record Updation Failed!\n");
     } else {
@@ -352,26 +588,28 @@ void processCommand(char *input, char * lastTableName) {
     free(record);
     free(rel);
     free(token);
-    
   }
   else if (strcmp(input, "ST") == 0) {
     char *token = newStr(PAGE_SIZE);
     char* tableName= getTableName(lastTableName, false);
     RM_ScanHandle *sc = (RM_ScanHandle *) malloc(sizeof(RM_ScanHandle));
     RM_TableData *rel = (RM_TableData *) malloc(sizeof(RM_TableData));
-      
-    openTable(rel, tableName);
-    //Expr cond = NULL;
-    //printf("Enter the condition! (MAX_LEN=%d) : ", MAX_NAME - 1); // -1 for \0 terminator
-    // Mix 2 scans with c=3 as condition
-    Expr *se1, *left, *right;
-    MAKE_CONS(left, stringToValue("id"));
-    MAKE_ATTRREF(right, 2);
-    MAKE_BINOP_EXPR(se1, left, right, OP_COMP_EQUAL);
-      
+
+    RC err = openTable(rel, tableName);
+    if (err != RC_OK) {
+      free(sc);
+      free(rel);
+      return showError("UNKNOWN TABLE!");
+    }
+    Expr *expr = parseExpressions(rel->schema);
+    if (expr == NULL) {
+      free(sc);
+      free(rel);
+      return showError("INVALID EXPRESSSION");
+    }
     Record *record;
     createRecord(&record, rel->schema);
-    startScan(rel, sc, se1);
+    startScan(rel, sc, expr);
     while(true) {
       err = next(sc, record);
       if (err != RC_OK) {
@@ -416,7 +654,7 @@ void processCommand(char *input, char * lastTableName) {
     sprintf(displayStr,"Enter RID for record retrieval! : "); // -1 for \0 terminator
     getInput(displayStr, token, 10, false);
     //scanf("%s", token);
-    
+
     RID *rid= new(RID);
     char *temp1= malloc(30);
     char *temp2= malloc(30);
@@ -440,7 +678,7 @@ void processCommand(char *input, char * lastTableName) {
     if(rc != RC_OK) {
       return showError("UNKNOWN RECORD!\n");
     }
-    
+
     printf("Record: \n");
     printRecord(rel->schema, record);
     memcpy(lastTableName, tableName, MAX_NAME);
