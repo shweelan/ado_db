@@ -106,6 +106,15 @@ Features
 	<Enter>
 			Table deleted
 	———————————————————
+	ST
+	In scan Table you can do the following:
+		a > 5
+		a != 5
+		c != true
+		c = false
+		a >= 5 & c != false
+		a <= 6 | a >= 3
+	———————————————————
 
 ====================================================================================
 CONFIGURE Memory Leaks Check
