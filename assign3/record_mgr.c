@@ -381,12 +381,14 @@ RC createTable (char *name, Schema *schema) {
 RC openTable (RM_TableData *rel, char *name) {
   // TODO checl all errors and free resources on error or throw it. // TODO downcase name
   RC err;
-  BM_BufferPool *bm = new(BM_BufferPool); // TODO free it
+  BM_BufferPool *bm = new(BM_BufferPool); // TODO free it, Done in closeTable
   BM_PageHandle *pageHandle;
   if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_LRU, NULL))) {
+    free(bm);
     return err;
   }
   if ((err = atomicPinPage(bm, &pageHandle, 0))) {
+    free(bm);
     return err;
   }
   Schema *schema = parseSchema(pageHandle->data);
