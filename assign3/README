@@ -14,6 +14,28 @@ There is a client packaged along with the client and additional test file to che
 The user interface is present in the file “client.c”
 and additional test case for memory is present in the file “test_memory_leaks.c” and can be run directly using appropriate main functions.
 
+
+====================================================================================
+Tables and free space management design
+====================================================================================
+
+The tables are implemented as follows:
+	For each table there will be a file.
+	The first page (page#0) of the file is the schema informations about that table.
+	The second page (page#1) of the file will be a bit map for tracing the pages that have at least one empty slot.
+	The rest of the pages are data pages.
+
+Each data page (page#2 .. ) is implemented as follows:
+	The first 11 bytes are booked for optimization usage, the first 2 bytes hold the count for the total number of records stored in that page.
+	The rest of bytes are holding the data along with the bitmaps for free slots.
+	The size of bitmap is not fixed, it is related to record size.
+
+Using the bellow formula is how to calculate the size of bytes for bitmap and the rest will hold the records in slots.
+	maxSlotsPerPage = floor((pageSize * NUM_BITS) / (recordSize * NUM_BITS + 1)); // Where pageSize = (X * recordSize) + (X / NUM_BITS).
+	slotsBitMapSize = ceil(((float) maxSlotsPerPage) / NUM_BITS);
+
+Each record data are arranged as series of bytes next to each other filling one slot.
+
 ====================================================================================
 Interactive client
 ====================================================================================
