@@ -14,14 +14,14 @@
 
 
 char *copyString(char *_string) {
-  char *string = newStr(strlen(_string)); // TODO free it[count, multiple maybe]
+  char *string = newStr(strlen(_string));
   strcpy(string, _string);
   return string;
 }
 
 
 RC atomicPinPage(BM_BufferPool *bm, BM_PageHandle **resultPage, int pageIdx) {
-  BM_PageHandle *page = new(BM_PageHandle); // TODO free it, Done in atomicUnpinPage
+  BM_PageHandle *page = new(BM_PageHandle);
   RC err = pinPage(bm, page, pageIdx);
   if (err) {
     free(page);
@@ -69,8 +69,7 @@ int getSchemaStringLength(char *string) {
 
 
 char * stringifySchema(Schema *schema) {
-  char *string = newStr(PAGE_SIZE - 1); // -1 because newStr adds 1 byte for \0 terminator // TODO free it[count, multiple maybe]
-  // placeholder for schema length
+  char *string = newStr(PAGE_SIZE - 1); // -1 because newStr adds 1 byte for \0 terminator
   int formatLen = 8;
   char *format = "%08x";
   char intString[formatLen + 1];// +1 for \0 terminator
@@ -112,22 +111,24 @@ char * stringifySchema(Schema *schema) {
   return string;
 }
 
-
+/*
+ *Method to parse Schema (convert to string)
+ */
 Schema * parseSchema(char *_string) {
   int length = getSchemaStringLength(_string);
-  char *string = newCharArr(length); // TODO free it, Done below
+  char *string = newCharArr(length);
   memcpy(string, _string, length);
   char *token;
   token = strtok(string, DELIMITER); // ignore it's already the length of schema
   token = strtok(NULL, DELIMITER);
   int numAttr = (int) strtol(token, NULL, 16);
-  char **attrNames = newArray(char *, numAttr); // TODO free it, Done in freeSchemaObjects
-  DataType *dataTypes = newArray(DataType, numAttr); // TODO free it, Done in freeSchemaObjects
-  int *typeLength = newIntArr(numAttr); // TODO free it, Done in freeSchemaObjects
+  char **attrNames = newArray(char *, numAttr);
+  DataType *dataTypes = newArray(DataType, numAttr);
+  int *typeLength = newIntArr(numAttr);
   int i;
   for (i = 0; i < numAttr; i++) {
     token = strtok(NULL, DELIMITER);
-    attrNames[i] = copyString(token); // TODO free it, Done in freeSchemaObjects
+    attrNames[i] = copyString(token);
 
     token = strtok(NULL, DELIMITER);
     dataTypes[i] = (DataType) strtol(token, NULL, 16);
@@ -137,7 +138,7 @@ Schema * parseSchema(char *_string) {
   }
   token = strtok(NULL, DELIMITER);
   int keySize = (int) strtol(token, NULL, 16);
-  int *keyAttrs = newIntArr(keySize); // TODO free it, Done in freeSchemaObjects
+  int *keyAttrs = newIntArr(keySize);
   for (i = 0; i < keySize; i++) {
     token = strtok(NULL, DELIMITER);
     keyAttrs[i] = (int) strtol(token, NULL, 16);
@@ -171,7 +172,7 @@ int getAttrStartingPosition(Schema *schema, int attrNum) {
   return position;
 }
 
-
+//Prints the schema
 void printSchema(Schema *schema) {
   char del;
   printf("{\n\tnumAttr : %d,\n\tattrs : [\n", schema->numAttr);
@@ -188,7 +189,7 @@ void printSchema(Schema *schema) {
   printf("\t]\n}\n\n");
 }
 
-
+//Prints the record
 void printRecord(Schema *schema, Record * record) {
   char del;
   Value *val;
@@ -225,7 +226,7 @@ void printRecord(Schema *schema, Record * record) {
   printf("}\n\n");
 }
 
-
+//Gets size of record in Bytes
 int getRecordSizeInBytes(Schema *schema, bool withTerminators) {
   int size = 0;
   int i;
@@ -250,7 +251,6 @@ int getRecordSizeInBytes(Schema *schema, bool withTerminators) {
   }
   return size;
 }
-
 
 bool isSetBit(char *bitMap, int bitIdx) {
   int byteIdx = bitIdx / NUM_BITS;
@@ -340,27 +340,23 @@ RC changePageFillBit(RM_TableData *rel, int pageNum, bool bitVal) {
 
 
 RC initRecordManager (void *mgmtData) {
-  // TODO
   initStorageManager();
   return RC_OK;
 }
 
 
 RC shutdownRecordManager () {
-  // TODO
   return RC_OK;
 }
 
 
 RC createTable (char *name, Schema *schema) {
-  // TODO check if not already exists. // TODO downcase the name
   RC err;
   if ((err = createPageFile(name))) {
-    return err; // TODO THROW maybe because nothing can be dont after this point
+    return err;
   }
 
   // No need to ensureCapacity, because creating a file already ensures one block, we dont need more for now.
-  // TODO check if schemaString is less than pageSize, else (find a new solution)
   char *schemaString = stringifySchema(schema);
   SM_FileHandle fileHandle;
   if ((err = openPageFile(name, &fileHandle))) {
@@ -379,9 +375,8 @@ RC createTable (char *name, Schema *schema) {
 
 
 RC openTable (RM_TableData *rel, char *name) {
-  // TODO checl all errors and free resources on error or throw it. // TODO downcase name
   RC err;
-  BM_BufferPool *bm = new(BM_BufferPool); // TODO free it
+  BM_BufferPool *bm = new(BM_BufferPool);
   BM_PageHandle *pageHandle;
   if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_LRU, NULL))) {
     return err;
@@ -390,7 +385,7 @@ RC openTable (RM_TableData *rel, char *name) {
     return err;
   }
   Schema *schema = parseSchema(pageHandle->data);
-  rel->name = copyString(name); // TODO free it, Done in closeTable
+  rel->name = copyString(name);
   rel->schema = schema;
   int recordSize = getRecordSizeInBytes(schema, true);
   int pageSize = PAGE_SIZE - PAGE_HEADER_LEN;
@@ -441,17 +436,17 @@ RC closeTable (RM_TableData *rel) {
   return RC_OK;
 }
 
-
+//Create schema function
 Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int keySize, int *keys) {
-  Schema *schema = new(Schema); // TODO free it, Done in freeSchema
+  Schema *schema = new(Schema);
   schema->numAttr = numAttr;
-  schema->attrNames = newArray(char *, numAttr); // TODO free it, Done in freeSchema
-  schema->dataTypes = newArray(DataType, numAttr); // TODO free it, Done in freeSchema
-  schema->typeLength = newIntArr(numAttr); // TODO free it, Done in freeSchema
+  schema->attrNames = newArray(char *, numAttr);
+  schema->dataTypes = newArray(DataType, numAttr);
+  schema->typeLength = newIntArr(numAttr);
   int i;
   int len;
   for (i = 0; i < numAttr; i++) {
-    schema->attrNames[i] = copyString(attrNames[i]); // TODO free it, Done in freeSchema
+    schema->attrNames[i] = copyString(attrNames[i]);
     schema->dataTypes[i] = dataTypes[i];
     switch (dataTypes[i]) {
       case DT_INT:
@@ -470,14 +465,14 @@ Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *t
     schema->typeLength[i] = len;
   }
   schema->keySize = keySize;
-  schema->keyAttrs = newIntArr(keySize); // TODO free it, Done in freeSchema
+  schema->keyAttrs = newIntArr(keySize);
   for (i = 0; i < keySize; i++) {
     schema->keyAttrs[i] = keys[i];
   }
   return schema;
 }
 
-
+//free schema
 RC freeSchema (Schema *schema) {
   freeSchemaObjects(schema->numAttr, schema->attrNames, schema->dataTypes, schema->typeLength, schema->keyAttrs);
   free(schema);
@@ -491,16 +486,14 @@ int getRecordSize (Schema *schema) {
 
 
 RC deleteTable (char *name) {
-  RC err = destroyPageFile(name);
-  // TODO more descriptive error
-  return err;
+  return destroyPageFile(name);
 }
 
 
 RC createRecord (Record **record, Schema *schema) {
   int size = getRecordSizeInBytes(schema, true);
-  Record *r = new(Record); // TODO free it, Done in freeRecord
-  r->data = newCharArr(size); // TODO free it, Done in freeRecord
+  Record *r = new(Record);
+  r->data = newCharArr(size);
   *record = r;
   return RC_OK;
 }
@@ -512,7 +505,7 @@ RC freeRecord (Record *record) {
   return RC_OK;
 }
 
-
+//Set the valuess in record
 RC setAttr (Record *record, Schema *schema, int attrNum, Value *value) {
   int position = getAttrStartingPosition(schema, attrNum);
   char *ptr = record->data;
@@ -556,7 +549,7 @@ RC setAttr (Record *record, Schema *schema, int attrNum, Value *value) {
 
 
 RC getAttr (Record *record, Schema *schema, int attrNum, Value **value) {
-  Value *val = new(Value); // TODO free it
+  Value *val = new(Value);
   int position = getAttrStartingPosition(schema, attrNum);
   int size;
   char *ptr = record->data;
@@ -573,7 +566,7 @@ RC getAttr (Record *record, Schema *schema, int attrNum, Value **value) {
       break;
     case DT_STRING:
       size = schema->typeLength[attrNum];
-      val->v.stringV = newStr(size); // TODO free it
+      val->v.stringV = newStr(size);
       memcpy(val->v.stringV, ptr, size + 1); // +1 for \0 terminator
       break;
     case DT_BOOL:
@@ -631,7 +624,7 @@ RC insertRecord (RM_TableData *rel, Record *record) {
   return RC_OK;
 }
 
-
+//get the record details
 RC getRecord (RM_TableData *rel, RID id, Record *record) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
@@ -656,7 +649,7 @@ RC getRecord (RM_TableData *rel, RID id, Record *record) {
   return atomicUnpinPage(bm, page, false); // false for not markDirty
 }
 
-
+//functions deletes the record in rid
 RC deleteRecord (RM_TableData *rel, RID id) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
@@ -689,7 +682,7 @@ RC deleteRecord (RM_TableData *rel, RID id) {
   return RC_OK;
 }
 
-
+//updates the record
 RC updateRecord (RM_TableData *rel, Record *record) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
@@ -714,11 +707,11 @@ RC updateRecord (RM_TableData *rel, Record *record) {
   return atomicUnpinPage(bm, page, true);
 }
 
-
+//start scan
 RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond) {
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
   forceFlushPool(bm);
-  ScanMgmtInfo *smi = new(ScanMgmtInfo); // TODO free it, Done in closeScan
+  ScanMgmtInfo *smi = new(ScanMgmtInfo); 
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   SM_FileHandle *fHandle = pmi->fHandle;
   int totalNumDataPages = fHandle->totalNumPages - TABLE_HEADER_PAGES_LEN;
@@ -733,6 +726,7 @@ RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond) {
 }
 
 
+//used in conjuction with start scan to get next recod in scan
 RC next (RM_ScanHandle *scan, Record *record) {
   ScanMgmtInfo *smi = (ScanMgmtInfo *)(scan->mgmtData);
   Value *val;
@@ -764,7 +758,7 @@ RC next (RM_ScanHandle *scan, Record *record) {
   return next(scan, record);
 }
 
-
+//close the scan
 RC closeScan (RM_ScanHandle *scan) {
   ScanMgmtInfo *smi = (ScanMgmtInfo *)(scan->mgmtData);
   free(smi);
