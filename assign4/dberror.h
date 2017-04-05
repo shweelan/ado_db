@@ -1,7 +1,6 @@
 #ifndef DBERROR_H
 #define DBERROR_H
 
-#include <stdlib.h>
 #include "stdio.h"
 #include <errno.h>
 
