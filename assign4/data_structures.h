@@ -48,6 +48,7 @@ void saDestroy(smartArray *arr);
 int saInsert(smartArray *arr, int elem);
 int saDeleteOne(smartArray *arr, int elem);
 int saDeleteAll(smartArray *arr, int elem);
-void printArr(smartArray *arr);
+void saEmpty(smartArray *arr);
+void saPrint(smartArray *arr);
 
 #endif
