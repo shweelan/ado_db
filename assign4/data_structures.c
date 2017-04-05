@@ -121,3 +121,93 @@ void hmDestroy(HM *hm) {
   }
   free(hm);
 }
+
+
+void printArr(smartArray *arr) {
+  printf("------------------------\n");
+  printf("[ ");
+  for(int i = 0; i < arr->fill; i++) {
+    printf("%d ", arr->elems[i]);
+  }
+  printf("]\n");
+  printf("------------------------\n");
+}
+
+
+int saBinarySearch(smartArray *arr, int elem, int *fitOn) {
+  int first = 0;
+  int last = arr->fill - 1;
+  if (last < 0) { // empty array
+    (*fitOn) = first;
+    return -1;
+  }
+  int pos;
+  //printf("\n\n");
+  while(1) {
+    pos = (first + last) / 2;
+    //printf("first=%d last=%d pos=%d val=%d\n", first, last, pos, arr->elems[pos]);
+    if (elem == arr->elems[pos]) {
+      while(elem == arr->elems[pos - 1]) { // always get the first occurance
+        pos--;
+      }
+      (*fitOn) = pos;
+      return pos;
+    }
+    if (first >= last) {
+      if (elem > arr->elems[first]) {
+        first++;
+      }
+      (*fitOn) = first; // must fit here
+      return -1; // not found
+    }
+    if (elem < arr->elems[pos]) {
+      last = pos - 1;
+    }
+    else {
+      first = pos + 1;
+    }
+  }
+}
+
+
+smartArray *saInit(int size) {
+  smartArray *arr = new(smartArray); // TODO free, Done in saDestroy
+  arr->elems = newIntArr(size); // TODO free, Done in saDestroy
+  arr->size = size;
+  arr->fill = 0;
+  return arr;
+}
+
+
+void saDestroy(smartArray *arr) {
+  free(arr->elems);
+  free(arr);
+}
+
+
+int saInsert(smartArray *arr, int elem) {
+  int fitOn = -1; // not more place
+  if (arr->size > arr->fill) {
+    int index = saBinarySearch(arr, elem, &fitOn);
+    printf("inserting %d, found?=%s, will fit on index=%d\n", elem, (index < 0) ? "false" : "true", fitOn);
+    if (fitOn != arr->fill) { // insert at the end
+      for (int i = arr->fill; i > fitOn; i--) {
+        arr->elems[i] = arr->elems[i - 1];
+      }
+    }
+    arr->elems[fitOn] = elem;
+    arr->fill++;
+  }
+  printArr(arr);
+  return fitOn;
+}
+
+
+int saDeleteOne(smartArray *arr, int elem) {
+  return -1;
+}
+
+
+int saDeleteAll(smartArray *arr, int elem) {
+  return -1;
+}
