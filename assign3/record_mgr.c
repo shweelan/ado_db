@@ -11,15 +11,14 @@
 
 
 // helpers
-
-
+//Creates new string and copies the value
 char *copyString(char *_string) {
   char *string = newStr(strlen(_string));
   strcpy(string, _string);
   return string;
 }
 
-
+//Pin the page
 RC atomicPinPage(BM_BufferPool *bm, BM_PageHandle **resultPage, int pageIdx) {
   BM_PageHandle *page = new(BM_PageHandle);
   RC err = pinPage(bm, page, pageIdx);
@@ -30,7 +29,7 @@ RC atomicPinPage(BM_BufferPool *bm, BM_PageHandle **resultPage, int pageIdx) {
   return err;
 }
 
-
+//Calls the unpin method.
 RC atomicUnpinPage(BM_BufferPool *bm, BM_PageHandle *page, bool dirty) {
   RC err;
   if (dirty) {
@@ -149,7 +148,7 @@ Schema * parseSchema(char *_string) {
   return s;
 }
 
-
+//Method to get pointer position
 int getAttrStartingPosition(Schema *schema, int attrNum) {
   int position = 0;
   int i;
@@ -261,21 +260,21 @@ bool isSetBit(char *bitMap, int bitIdx) {
   return false;
 }
 
-
+//Used to set memory indicators
 void setBit(char *bitMap, int bitIdx) {
   int byteIdx = bitIdx / NUM_BITS;
   int bitSeq = NUM_BITS - (bitIdx % NUM_BITS);
   bitMap[byteIdx] = bitMap[byteIdx] | 1 << (bitSeq - 1);
 }
 
-
+//Used to reset memory indicators
 void unsetBit(char *bitMap, int bitIdx) {
   int byteIdx = bitIdx / NUM_BITS;
   int bitSeq = NUM_BITS - (bitIdx % NUM_BITS);
   bitMap[byteIdx] = bitMap[byteIdx] & ~(1 << (bitSeq - 1));
 }
 
-
+//Used to get free memory locations
 int getUnsetBitIndex(char *bitMap, int bitmapSize) {
   int bytesCount = 0;
   unsigned char byte;
@@ -349,7 +348,8 @@ RC shutdownRecordManager () {
   return RC_OK;
 }
 
-
+//Create table functionality
+//Tables are stored Page2 onwards
 RC createTable (char *name, Schema *schema) {
   RC err;
   if ((err = createPageFile(name))) {
@@ -373,10 +373,10 @@ RC createTable (char *name, Schema *schema) {
   return RC_OK;
 }
 
-
+//Opens the table, close the table after completing operations
 RC openTable (RM_TableData *rel, char *name) {
   RC err;
-  BM_BufferPool *bm = new(BM_BufferPool); // TODO free it, Done in closeTable
+  BM_BufferPool *bm = new(BM_BufferPool);
   BM_PageHandle *pageHandle;
   if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_LRU, NULL))) {
     free(bm);
@@ -423,7 +423,7 @@ int getNumTuples (RM_TableData *rel) {
   return res;
 }
 
-
+//Close the table, and releases the bufferPool and schema
 RC closeTable (RM_TableData *rel) {
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
 	RC err;
@@ -438,7 +438,13 @@ RC closeTable (RM_TableData *rel) {
   return RC_OK;
 }
 
-//Create schema function
+
+/*
+ *Create schema function
+ *For each table there will be a file.
+ *The first page (page#0) of the file is the schema informations about that table.
+ *The second page (page#1) of the file will be a bit map for tracing the pages that have at least one empty slot.
+ */
 Schema *createSchema (int numAttr, char **attrNames, DataType *dataTypes, int *typeLength, int keySize, int *keys) {
   Schema *schema = new(Schema);
   schema->numAttr = numAttr;
@@ -580,7 +586,8 @@ RC getAttr (Record *record, Schema *schema, int attrNum, Value **value) {
   return RC_OK;
 }
 
-
+//Insert the record into the table mentioned in the relation
+//Method sets the RID in the record for future use
 RC insertRecord (RM_TableData *rel, Record *record) {
   RC err;
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
