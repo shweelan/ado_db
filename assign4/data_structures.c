@@ -185,18 +185,27 @@ void saDestroy(smartArray *arr) {
 }
 
 
+int saInsertAt(smartArray *arr, int elem, int index) {
+  if (arr->size > arr->fill && index <= arr->fill) {
+    if (index != arr->fill) { // insert at the end
+      for (int i = arr->fill; i > index; i--) {
+        arr->elems[i] = arr->elems[i - 1];
+      }
+    }
+    arr->elems[index] = elem;
+    arr->fill++;
+    return index;
+  }
+  return -1; // not more place, or invalid index
+}
+
+
 int saInsert(smartArray *arr, int elem) {
   int fitOn = -1; // not more place
   if (arr->size > arr->fill) {
     int index = saBinarySearch(arr, elem, &fitOn);
     printf("inserting %d, found?=%s, will fit on index=%d\n", elem, (index < 0) ? "false" : "true", fitOn);
-    if (fitOn != arr->fill) { // insert at the end
-      for (int i = arr->fill; i > fitOn; i--) {
-        arr->elems[i] = arr->elems[i - 1];
-      }
-    }
-    arr->elems[fitOn] = elem;
-    arr->fill++;
+    fitOn = saInsertAt(arr, elem, fitOn);
   }
   saPrint(arr);
   return fitOn;
