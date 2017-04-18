@@ -212,7 +212,7 @@ int saInsert(smartArray *arr, int elem) {
 }
 
 
-void saDelete(smartArray *arr, int index, int count) {
+void saDeleteAt(smartArray *arr, int index, int count) {
   arr->fill -= count;
   for (int i = index; i < arr->fill; i++) {
     arr->elems[i] = arr->elems[i + count];
@@ -225,7 +225,7 @@ int saDeleteOne(smartArray *arr, int elem) {
   int index = saBinarySearch(arr, elem, &_unused);
   printf("deleteing %d, found?=%s, will delete from index=%d\n", elem, (index < 0) ? "false" : "true", index);
   if (index >= 0) {
-    saDelete(arr, index, 1);
+    saDeleteAt(arr, index, 1);
   }
   saPrint(arr);
   return index;
@@ -241,7 +241,7 @@ int saDeleteAll(smartArray *arr, int elem) {
     while(index + count < arr->fill && elem == arr->elems[index + count]) {
       count++;
     }
-    saDelete(arr, index, count);
+    saDeleteAt(arr, index, count);
   }
   saPrint(arr);
   return index;

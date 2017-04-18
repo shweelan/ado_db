@@ -47,6 +47,7 @@ int saBinarySearch(smartArray *arr, int elem, int *fitOn);
 void saDestroy(smartArray *arr);
 int saInsertAt(smartArray *arr, int elem, int index);
 int saInsert(smartArray *arr, int elem);
+void saDeleteAt(smartArray *arr, int index, int count);
 int saDeleteOne(smartArray *arr, int elem);
 int saDeleteAll(smartArray *arr, int elem);
 void saEmpty(smartArray *arr);

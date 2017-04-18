@@ -1,8 +1,33 @@
-//#include "btree_mgr.h"
-#include "data_structures.h"
+#include "btree_mgr.h"
 
 // helpers
 
+BT_Node *createBTNode(int size, int isLeaf) {
+  BT_Node *node = new(BT_Node); // TODO free it, Done in destroyBTNode
+  node->isLeaf = isLeaf;
+  node->size = size;
+  node->vals = saInit(size);
+  if (isLeaf) {
+    node->leafRIDPages = saInit(size);
+    node->leafRIDSlots = saInit(size);
+  }
+  else {
+    node->childrenPages = saInit(size + 1);
+  }
+  return node;
+}
+
+void destroyBTNode(BT_Node *node) {
+  saDestroy(node->vals);
+  if (node->isLeaf) {
+    saDestroy(node->leafRIDPages);
+    saDestroy(node->leafRIDSlots);
+  }
+  else {
+    saDestroy(node->childrenPages);
+  }
+  free(node);
+}
 
 //functionality
 

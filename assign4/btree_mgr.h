@@ -3,6 +3,7 @@
 
 #include "dberror.h"
 #include "tables.h"
+#include "data_structures.h"
 
 // structure for accessing btrees
 typedef struct BTreeHandle {
@@ -15,6 +16,19 @@ typedef struct BT_ScanHandle {
   BTreeHandle *tree;
   void *mgmtData;
 } BT_ScanHandle;
+
+
+typedef struct BT_Node {
+  int size; // values size
+  int isLeaf;
+  smartArray *vals;
+  smartArray *childrenPages;
+  smartArray *leafRIDPages;
+  smartArray *leafRIDSlots;
+} BT_Node;
+
+// Node functions
+BT_Node *createBTNode(int size, int isLeaf);
 
 // init and shutdown index manager
 extern RC initIndexManager (void *mgmtData);
