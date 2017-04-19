@@ -9,6 +9,8 @@
 typedef struct BTreeHandle {
   DataType keyType;
   char *idxId;
+  int size;
+  int whereIsRoot;
   void *mgmtData;
 } BTreeHandle;
 
