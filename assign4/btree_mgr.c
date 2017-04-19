@@ -67,6 +67,12 @@ RC createBtree (char *idxId, DataType keyType, int n)
   ptr += SIZE_INT;
   int whereIsRoot = 0;
   memcpy(ptr, &whereIsRoot, SIZE_INT);
+  ptr += SIZE_INT;
+  int numNodes = 0;
+  memcpy(ptr, &numNodes, SIZE_INT);
+  ptr += SIZE_INT;
+  int numEntries = 0;
+  memcpy(ptr, &numEntries, SIZE_INT);
 
   if (RC_OK != (rc= writeBlock(0, fHandle, header))) {
     free(fHandle);
@@ -97,8 +103,10 @@ RC openBtree (BTreeHandle **tree, char *idxId){
   _tree->mgmtData = bm;
 
   int size;
-  int whereIsRoot;
   DataType keyType;
+  int whereIsRoot;
+  int numNodes;
+  int numEntries;
 
   memcpy(&size, ptr, SIZE_INT);
   ptr += SIZE_INT;
@@ -106,10 +114,15 @@ RC openBtree (BTreeHandle **tree, char *idxId){
   ptr += SIZE_INT;
   memcpy(&whereIsRoot, ptr, SIZE_INT);
   ptr += SIZE_INT;
+  memcpy(&numNodes, ptr, SIZE_INT);
+  ptr += SIZE_INT;
+  memcpy(&numEntries, ptr, SIZE_INT);
 
   _tree->keyType = keyType;
   _tree->size = size;
   _tree->whereIsRoot = whereIsRoot;
+  _tree->numEntries = numEntries;
+  _tree->numNodes = numNodes;
   *tree = _tree;
   int rc= unpinPage(bm, pageHandle);
   free(pageHandle);
