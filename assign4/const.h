@@ -14,6 +14,9 @@
 /* Per table buffer size */
 #define PER_TBL_BUF_SIZE 10
 
+/* Per table index size */
+#define PER_IDX_BUF_SIZE 10
+
 /* Page header length */
 #define PAGE_HEADER_LEN 11
 
@@ -30,4 +33,5 @@
 #define PATH_DIR "/tmp/database_ado/"
 #define DEFAULT_MODE 0777
 
+#define SIZE_INT sizeof(int)
 #endif
