@@ -5,22 +5,6 @@
 #include "tables.h"
 #include "data_structures.h"
 
-// structure for accessing btrees
-typedef struct BTreeHandle {
-  DataType keyType;
-  char *idxId;
-  int size;
-  int numEntries;
-  int numNodes;
-  int whereIsRoot;
-  void *mgmtData;
-} BTreeHandle;
-
-typedef struct BT_ScanHandle {
-  BTreeHandle *tree;
-  void *mgmtData;
-} BT_ScanHandle;
-
 
 typedef struct BT_Node {
   int size; // values size
@@ -29,7 +13,31 @@ typedef struct BT_Node {
   smartArray *childrenPages;
   smartArray *leafRIDPages;
   smartArray *leafRIDSlots;
+  // tree pointers
+  struct BT_Node **children; // in all but in leaf
+  struct BT_Node *parent; // in all but in root
+  struct BT_Node *left; // in all but in root
+  struct BT_Node *right; // in all but in root
 } BT_Node;
+
+
+// structure for accessing btrees
+typedef struct BTreeHandle {
+  DataType keyType;
+  char *idxId;
+  int size;
+  int numEntries;
+  int numNodes;
+  int depth;
+  int whereIsRoot;
+  BT_Node *root;
+  void *mgmtData;
+} BTreeHandle;
+
+typedef struct BT_ScanHandle {
+  BTreeHandle *tree;
+  void *mgmtData;
+} BT_ScanHandle;
 
 // Node functions
 BT_Node *createBTNode(int size, int isLeaf);
