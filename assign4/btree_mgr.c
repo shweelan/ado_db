@@ -631,13 +631,14 @@ RC createTestBTree2(BTreeHandle *tree){
 RC openTreeScan (BTreeHandle *tree, BT_ScanHandle **handle){
   BT_ScanHandle *_handle = new(BT_ScanHandle);
   BM_BufferPool *bm = (BM_BufferPool *) tree->mgmtData;
-  forceFlushPool(bm);
+  ScanMgmtInfo *scanInfo = new(ScanMgmtInfo);
   _handle->tree = tree;
-  _handle->thisNode = tree->root;
-  while(!_handle->thisNode->isLeaf) { // finding the left most leaf
-    _handle->thisNode = _handle->thisNode->children[0];
+  scanInfo->currentNode = tree->root;
+  while(!scanInfo->currentNode->isLeaf) { // finding the left most leaf
+    scanInfo->currentNode = scanInfo->currentNode->children[0];
   }
-  _handle->ridCounter = -1;
+  scanInfo->elementIndex = 0;
+  _handle->mgmtData =scanInfo;
   *handle = _handle;
   return RC_OK;
 }
@@ -648,21 +649,19 @@ RC closeTreeScan (BT_ScanHandle *handle){
 }
 
 RC nextEntry (BT_ScanHandle *handle, RID *result){
-  if(handle->thisNode->isLeaf && handle->ridCounter<handle->thisNode->leafRIDPages->fill) { // finding the left most leaf
-    int i=handle->ridCounter!=-1?handle->ridCounter:0;
-    result->page =handle->thisNode->leafRIDPages->elems[i];
-    result->slot =handle->thisNode->leafRIDPages->elems[i];
-    handle->ridCounter=++i;
-  } else {
+  ScanMgmtInfo *scanInfo = handle->mgmtData;
+  if(scanInfo->elementIndex >= scanInfo->currentNode->leafRIDPages->fill) { // finding the left most leaf
     //searchNextNode
-    if(handle->thisNode->right==NULL){
+    if(scanInfo->currentNode->right==NULL){
       return RC_IM_NO_MORE_ENTRIES;
     } else {
-      handle->thisNode = handle->thisNode->right;
-      handle->ridCounter = -1;
-      return nextEntry (handle, result);
+      scanInfo->currentNode = scanInfo->currentNode->right;
+      scanInfo->elementIndex = 0;
     }
   }
+  result->page =scanInfo->currentNode->leafRIDPages->elems[scanInfo->elementIndex];
+  result->slot =scanInfo->currentNode->leafRIDPages->elems[scanInfo->elementIndex];
+  scanInfo->elementIndex++;
   return RC_OK;
 }
 
@@ -793,6 +792,7 @@ int main () {
   }
   closeTreeScan(handle);
   closeBtree(fullTree);
+  free(result);
   //deleteBtree(name);
 
   return 0;

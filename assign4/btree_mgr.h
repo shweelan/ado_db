@@ -5,7 +5,6 @@
 #include "tables.h"
 #include "data_structures.h"
 
-
 typedef struct BT_Node {
   int size; // values size
   int isLeaf;
@@ -38,6 +37,11 @@ typedef struct BT_ScanHandle {
   BTreeHandle *tree;
   void *mgmtData;
 } BT_ScanHandle;
+
+typedef struct ScanMgmtInfo {
+  BT_Node *currentNode;
+  int elementIndex;
+} ScanMgmtInfo;
 
 // Node functions
 BT_Node *createBTNode(int size, int isLeaf);
