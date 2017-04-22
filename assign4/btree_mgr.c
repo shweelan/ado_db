@@ -251,7 +251,6 @@ RC gwl(BTreeHandle *tree, int pageNum, int size, int fill, int *vals, int *ridP,
 
 
 RC loadBtreeNodes(BTreeHandle *tree, BT_Node *root, BT_Node **leftOnLevel, int level) {
-  BT_Node *child;
   BT_Node *left = leftOnLevel[level];
   RC err;
 //  printf("######################### LEVEL = %d\n", level);
@@ -630,7 +629,6 @@ RC createTestBTree2(BTreeHandle *tree){
 
 RC openTreeScan (BTreeHandle *tree, BT_ScanHandle **handle){
   BT_ScanHandle *_handle = new(BT_ScanHandle);
-  BM_BufferPool *bm = (BM_BufferPool *) tree->mgmtData;
   ScanMgmtInfo *scanInfo = new(ScanMgmtInfo);
   _handle->tree = tree;
   scanInfo->currentNode = tree->root;
