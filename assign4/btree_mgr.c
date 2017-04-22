@@ -150,7 +150,6 @@ RC readNode(BT_Node **node, BTreeHandle *tree, int pageNum) {
   return err;
 }
 
-
 RC writeNode(BT_Node *node, BTreeHandle *tree, int pageNum) {
   RC err;
   BM_PageHandle *page = new(BM_PageHandle);
@@ -275,6 +274,24 @@ RC loadBtreeNodes(BTreeHandle *tree, BT_Node *root, BT_Node **leftOnLevel, int l
   return RC_OK;
 }
 
+RC findKey (BTreeHandle *tree, Value *key, RID *result) {
+  BT_Node *current = tree->root;
+  int index, fitOn;
+  while(!current->isLeaf) {
+    index = saBinarySearch(current->vals, key->v.intV, &fitOn);
+    if (index >= 0) {
+      fitOn += 1;
+    }
+    current = current->children[fitOn];
+  }
+  index = saBinarySearch(current->vals, key->v.intV, &fitOn);
+  if (index < 0) {
+    return RC_IM_KEY_NOT_FOUND;
+  }
+  result->page = current->leafRIDPages->elems[index];
+  result->slot = current->leafRIDSlots->elems[index];
+  return RC_OK;
+}
 
 RC loadBtree(BTreeHandle *tree) {
   RC err;
@@ -789,6 +806,23 @@ int main () {
     printf("\nRID: %d.%d\n", result->page,result->slot);
   }
   closeTreeScan(handle);
+
+  int val[18] = {1,20,25,28,29,30,33,35,39,40,43,45,49,50,52,60,70,99};
+  Value *key = new(Value);
+  for(int i=0;i<18;i++){
+    key->v.intV = val[i];
+    RC rc = findKey (fullTree, key, result);
+    if(RC_OK == rc)
+      printf("\nRID--------------: %d.%d\n", result->page,result->slot);
+    else{
+      printf("\nNot found \n");
+    }
+
+    if(result->page!=i){
+      printf("ERROR.......!!!!!\n");
+    }
+  }
+  free(key);
   closeBtree(fullTree);
   free(result);
   //deleteBtree(name);

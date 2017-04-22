@@ -147,7 +147,7 @@ int saBinarySearch(smartArray *arr, int elem, int *fitOn) {
     pos = (first + last) / 2;
     //printf("first=%d last=%d pos=%d val=%d\n", first, last, pos, arr->elems[pos]);
     if (elem == arr->elems[pos]) {
-      while(elem == arr->elems[pos - 1]) { // always get the first occurance
+      while(pos && elem == arr->elems[pos - 1]) { // always get the first occurance
         pos--;
       }
       (*fitOn) = pos;
