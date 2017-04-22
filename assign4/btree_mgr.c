@@ -625,6 +625,43 @@ RC createTestBTree2(BTreeHandle *tree){
   return RC_OK;
 }
 
+RC openTreeScan (BTreeHandle *tree, BT_ScanHandle **handle){
+  BT_ScanHandle *_handle = new(BT_ScanHandle);
+  BM_BufferPool *bm = (BM_BufferPool *) tree->mgmtData;
+  forceFlushPool(bm);
+  _handle->tree = tree;
+  _handle->thisNode = tree->root;
+  while(!_handle->thisNode->isLeaf) { // finding the left most leaf
+    _handle->thisNode = _handle->thisNode->children[0];
+  }
+  _handle->ridCounter = -1;
+  *handle = _handle;
+  return RC_OK;
+}
+
+RC closeTreeScan (BT_ScanHandle *handle){
+  free(handle);
+  return RC_OK;
+}
+
+RC nextEntry (BT_ScanHandle *handle, RID *result){
+  if(handle->thisNode->isLeaf && handle->ridCounter<handle->thisNode->leafRIDPages->fill) { // finding the left most leaf
+    int i=handle->ridCounter!=-1?handle->ridCounter:0;
+    result->page =handle->thisNode->leafRIDPages->elems[i];
+    result->slot =handle->thisNode->leafRIDPages->elems[i];
+    handle->ridCounter=++i;
+  } else {
+    //searchNextNode
+    if(handle->thisNode->right==NULL){
+      return RC_IM_NO_MORE_ENTRIES;
+    }
+    handle->thisNode = handle->thisNode->right;
+    handle->ridCounter = -1;
+    return nextEntry (handle, result);
+  }
+  return RC_OK;
+}
+
 int main () {
   /*
   smartArray *arr = saInit(20);
@@ -743,6 +780,16 @@ int main () {
   BTreeHandle *fullTree;
   openBtree(&fullTree, name);
   printNode(fullTree->root->children[0]->children[1]->right);
+
+  BT_ScanHandle *handle;
+  openTreeScan(fullTree, &handle);
+  RID *result = new(RID);
+  while (nextEntry(handle, result) != RC_IM_NO_MORE_ENTRIES) {
+    printf("\nRID: %d.%d\n", result->page,result->slot);
+  }
+  closeTreeScan(handle);
+  closeBtree(fullTree);
   //deleteBtree(name);
+
   return 0;
 }
