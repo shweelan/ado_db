@@ -22,6 +22,9 @@ BT_Node *createBTNode(int size, int isLeaf) {
   node->isLeaf = isLeaf;
   node->size = size;
   node->vals = saInit(size);
+  node->right = NULL;
+  node->left = NULL;
+  node->parent = NULL;
   if (isLeaf) {
     node->leafRIDPages = saInit(size);
     node->leafRIDSlots = saInit(size);
@@ -654,10 +657,11 @@ RC nextEntry (BT_ScanHandle *handle, RID *result){
     //searchNextNode
     if(handle->thisNode->right==NULL){
       return RC_IM_NO_MORE_ENTRIES;
+    } else {
+      handle->thisNode = handle->thisNode->right;
+      handle->ridCounter = -1;
+      return nextEntry (handle, result);
     }
-    handle->thisNode = handle->thisNode->right;
-    handle->ridCounter = -1;
-    return nextEntry (handle, result);
   }
   return RC_OK;
 }
