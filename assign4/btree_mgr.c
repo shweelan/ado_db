@@ -46,6 +46,7 @@ void destroyBTNode(BT_Node *node) {
   }
   else {
     saDestroy(node->childrenPages);
+    free(node->children);
   }
   free(node);
 }
@@ -337,6 +338,30 @@ RC insPropagateParent(BTreeHandle *tree, BT_Node *left, BT_Node *right, int key)
   }
 }
 
+void freeNodes(BT_Node *root) {
+  if (root == NULL) {
+    return;
+  }
+  BT_Node *leaf = root;
+  while(!leaf->isLeaf) { // Finding the first leaf
+    leaf = leaf->children[0];
+  }
+  BT_Node *parent = leaf->parent;
+  BT_Node *next;
+  while (true) {
+    while(leaf != NULL) {
+      next = leaf->right;
+      destroyBTNode(leaf);
+      leaf = next;
+    }
+    if (parent == NULL) {
+      break;
+    }
+    leaf = parent;
+    parent = leaf->parent;
+  }
+}
+
 //functionality
 
 RC initIndexManager (void *mgmtData) {
@@ -439,7 +464,7 @@ RC openBtree (BTreeHandle **tree, char *idxId){
 
 RC closeBtree (BTreeHandle *tree){
   shutdownBufferPool(tree->mgmtData);
-  // TODO free all nodes
+  freeNodes(tree->root);
   free(tree);
   return RC_OK;
 }
