@@ -248,9 +248,9 @@ RC loadBtree(BTreeHandle *tree) {
     for (int i = 0; i < tree->depth; i++) {
       leftOnLevel[i] = NULL;
     }
-    if ((err = loadBtreeNodes(tree, tree->root, leftOnLevel, 0))) {
-      return err;
-    }
+    err = loadBtreeNodes(tree, tree->root, leftOnLevel, 0);
+    free(leftOnLevel);
+    return err;
   }
   return RC_OK;
 }
