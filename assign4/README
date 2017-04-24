@@ -1,0 +1,63 @@
+==========================================================================================
+CS-525 Assignment 4
+==========================================================================================
+Project Team
+————————————-
+Shweelan Samson
+Akshatha Kadri
+Ahmed Sayed
+==========================================================================================
+
+The implementation for the B+ Tree is complete and implementation present in the file btree_mgr.c.
+The additional test were done to check memory leakage.
+“Makefile” contains all the necessary instruction to compile and run the application.
+
+====================================================================================
+B+ Tree
+====================================================================================
+
+The Tree are implemented as follows:
+	For each Node there will be a page file.
+	Header information is in the Page 0. The header contains the following information
+		keyType - Key type
+	 	size 		- Size of B+ tree (the n)
+	 	numEntries
+	 	numNodes
+	  depth
+	  whereIsRoot - The page where Root is located
+	  nextPage
+
+		The starting point is fetching the whereIsRoot and building the tree from there.
+		The tree is stored in the file systems and we can retrieve the data of B tree
+		even after we complete the run.
+
+
+====================================================================================
+CONFIGURE Memory Leaks Check
+====================================================================================
+1. Open X-code -> new project -> commandLine
+
+2. Add the files to the X-code by right click on project and select “Add files to ..”
+		(Note: Add one test file at a time as X-Code does not support multiple mains)
+
+3. Place a debug point at starting point and last point
+
+4. Open instruments ( an easy way is —> Run test_memory_leaks.c -> On the left panel, click on Memory. When the window opens, click on “Profile in instruments”.
+
+5. Run the c program and note the processed displayed in the left panel. The program should stop at the first debug point.
+
+6. Go to Instruments and click on record. Select the process with the process id we noted in previous step.
+
+7. Now click resume.
+
+8. Check for any leaks in the program.
+
+====================================================================================
+Make DIR and Run
+====================================================================================
+1. Create a new directory to store files.
+
+2. To run it, execute the following commands
+        $ make
+        $./bin/test_assign/run
+        $./bin/test_expr/run
