@@ -148,7 +148,7 @@ void printNode(BT_Node *node) {
     return;
   }
   printf("\nNode details==>\n");
-  printf("Is Leaf : %d\t Size: %d\t Filled: %d \nNodeData:\t [ ", node->isLeaf, node->size, node->vals->fill);
+  printf("Is Leaf : %d\t Size: %d\t Filled: %d\t pageNum: %d\nNodeData:\t [ ", node->isLeaf, node->size, node->vals->fill, node->pageNum);
   int i;
   if(node->isLeaf){
     for (i = 0; i < node->vals->fill; i++) {
@@ -169,32 +169,6 @@ void printNode(BT_Node *node) {
     printf("%d ]", node->childrenPages->elems[i]);
   }
   printf("\n------------\n");
-}
-
-RC gwn(BTreeHandle *tree, int pageNum, int size, int fill, int *vals, int *ptrs) {
-  BT_Node *node = createBTNode(size, 0, pageNum);
-  int index, i;
-  for (i = 0; i < fill; i++) {
-    index = saInsert(node->vals, vals[i]);
-    saInsertAt(node->childrenPages, ptrs[i], index);
-  }
-  saInsertAt(node->childrenPages, ptrs[i], node->childrenPages->fill);
-  RC err = writeNode(node, tree);
-  destroyBTNode(node);
-  return err;
-}
-
-RC gwl(BTreeHandle *tree, int pageNum, int size, int fill, int *vals, int *ridP, int *ridS) {
-  BT_Node *node = createBTNode(size, 1, pageNum);
-  int index, i;
-  for (i = 0; i < fill; i++) {
-    index = saInsert(node->vals, vals[i]);
-    saInsertAt(node->leafRIDPages, ridP[i], index);
-    saInsertAt(node->leafRIDSlots, ridS[i], index);
-  }
-  RC err = writeNode(node, tree);
-  destroyBTNode(node);
-  return err;
 }
 
 RC loadBtreeNodes(BTreeHandle *tree, BT_Node *root, BT_Node **leftOnLevel, int level) {
@@ -280,200 +254,87 @@ RC writeBtreeHeader(BTreeHandle *tree) {
   return err;
 }
 
-void saveTestLeaf2(BTreeHandle *tree,int pn, int val, int i, int fill){
-  int dummy = 2912;
-  int lvals[2] = {val, dummy};
-  int ridP[2] = {i, dummy};
-  int ridS[2] = {i, dummy};
-  gwl(tree, pn, 2, fill, &lvals[0], &ridP[0], &ridS[0]);
-  i++;
-}
+RC insPropagateParent(BTreeHandle *tree, BT_Node *left, BT_Node *right, int key) {
+  BT_Node *parent = left->parent;
+  int index, i;
+  if (parent == NULL) {
+    parent = createBTNode(tree->size, 0, tree->nextPage);
+    saInsertAt(parent->childrenPages, left->pageNum, 0);
+    parent->children[0] = left;
+    tree->nextPage++;
+    tree->whereIsRoot = parent->pageNum;
+    tree->numNodes++;
+    tree->depth++;
+    tree->root = parent;
+    writeBtreeHeader(tree);
+  }
+  right->parent = parent;
+  left->parent = parent;
+  index = saInsert(parent->vals, key);
+  if (index >= 0) {
+    index += 1; // next position is the pointer
+    saInsertAt(parent->childrenPages, right->pageNum, index);
+    for (int i = parent->vals->fill; i > index; i--) {
+      parent->children[i] = parent->children[i - 1];
+    }
+    parent->children[index] = right;
+    return writeNode(parent, tree);
+  }
+  else {
+    // parent is full
+    // Overflowed = parent + 1 new item
+    BT_Node * overflowed = createBTNode(tree->size + 1, 0, -1);
+    overflowed->vals->fill = parent->vals->fill;
+    overflowed->childrenPages->fill = parent->childrenPages->fill;
+    memcpy(overflowed->vals->elems, parent->vals->elems, SIZE_INT * parent->vals->fill);
+    memcpy(overflowed->childrenPages->elems, parent->childrenPages->elems, SIZE_INT * parent->childrenPages->fill);
+    memcpy(overflowed->children, parent->children, sizeof(BT_Node *) * parent->childrenPages->fill);
+    index = saInsert(overflowed->vals, key);
+    saInsertAt(overflowed->childrenPages, right->pageNum, index + 1);
+    for (i = parent->childrenPages->fill; i > index + 1; i--) {
+      overflowed->children[i] = overflowed->children[i - 1];
+    }
+    overflowed->children[index + 1] = right;
 
-void saveTestNode2(BTreeHandle *tree,int pn, int val, int i, int j, int fill){
-  int dummy = 2912;
-  int lvals[2] = {val,dummy};
-  int ptr[3] = {i, j, dummy};
-  gwn(tree, pn, 2, fill, &lvals[0], &ptr[0]);
-  i++;
-}
+    int leftFill = overflowed->vals->fill / 2;
+    int rightFill = overflowed->vals->fill - leftFill;
+    BT_Node *rightParent = createBTNode(tree->size, 0, tree->nextPage);
+    tree->nextPage++;
+    tree->numNodes++;
+    // Since overflowed is sorted then it is safe to just copy the content
+    // copy left
+    parent->vals->fill = leftFill;
+    parent->childrenPages->fill = leftFill + 1;
+    int lptrsSize = parent->childrenPages->fill;
+    memcpy(parent->vals->elems, overflowed->vals->elems, SIZE_INT * leftFill);
+    memcpy(parent->childrenPages->elems, overflowed->childrenPages->elems, SIZE_INT * lptrsSize);
+    memcpy(parent->children, overflowed->children, sizeof(BT_Node *) * lptrsSize);
 
-RC createTestBTree2(BTreeHandle *tree){
-  int fill = 2;
-  int pn = 1;
-  int lvals1[2] = {1, 20};
-  int ridP1[2] = {0,1};
-  int ridS1[2] = {0,1};
-  gwl(tree, pn, 2, fill, &lvals1[0], &ridP1[0], &ridS1[0]);
+    // copy right
+    rightParent->vals->fill = rightFill;
+    rightParent->childrenPages->fill = overflowed->childrenPages->fill - lptrsSize;
+    int rptrsSize = rightParent->childrenPages->fill;
+    memcpy(rightParent->vals->elems, overflowed->vals->elems + leftFill, SIZE_INT * rightFill);
+    memcpy(rightParent->childrenPages->elems, overflowed->childrenPages->elems + lptrsSize, SIZE_INT * rptrsSize);
+    memcpy(rightParent->children, overflowed->children + lptrsSize, sizeof(BT_Node *) * rptrsSize);
 
-  int i=2;
-  fill = 1;
-  pn = 27;
-  int val = 25;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
+    // always take median to parent
+    key = rightParent->vals->elems[0];
+    saDeleteAt(rightParent->vals, 0, 1);
 
-  pn = 26;
-  val = 28;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
+    // introduce to each other
+    rightParent->right = parent->right;
+    if (rightParent->right != NULL) {
+      rightParent->right->left = rightParent;
+    }
+    parent->right = rightParent;
+    rightParent->left = parent;
 
-  pn = 24;
-  val = 29;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 23;
-  val = 30;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 20;
-  val = 33;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 19;
-  val = 35;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 17;
-  val = 39;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 16;
-  val = 40;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 12;
-  val = 43;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 11;
-  val = 45;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 9;
-  val = 49;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 8;
-  val = 50;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 5;
-  val = 52;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 4;
-  val = 60;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  pn = 2;
-  val = 70;
-  saveTestLeaf2(tree, pn,val, i, fill);
-  i++;
-
-  //-----------------------------------------------
-  pn = 3;
-  val = 25;
-  int prevPage=1;
-  int nextPage=27;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 28;
-  val = 29;
-  prevPage=26;
-  nextPage=24;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 25;
-  val = 33;
-  prevPage=23;
-  nextPage=20;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 21;
-  val = 39;
-  prevPage=19;
-  nextPage=17;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 18;
-  val = 43;
-  prevPage=16;
-  nextPage=12;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 13;
-  val = 49;
-  prevPage=11;
-  nextPage=9;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 10;
-  val = 52;
-  prevPage=8;
-  nextPage=5;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 6;
-  val = 70;
-  prevPage=4;
-  nextPage=2;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 7;
-  val = 28;
-  prevPage=3;
-  nextPage=28;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 29;
-  val = 35;
-  prevPage=25;
-  nextPage=21;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 22;
-  val = 45;
-  prevPage=18;
-  nextPage=13;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 14;
-  val = 60;
-  prevPage=10;
-  nextPage=6;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 15;
-  val = 30;
-  prevPage=7;
-  nextPage=29;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 30;
-  val = 50;
-  prevPage=22;
-  nextPage=14;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  pn = 31;
-  val = 40;
-  prevPage=15;
-  nextPage=30;
-  saveTestNode2(tree, pn, val, prevPage, nextPage, fill);
-
-  return RC_OK;
+    writeNode(parent, tree);
+    writeNode(rightParent, tree);
+    writeBtreeHeader(tree);
+    return insPropagateParent(tree, parent, rightParent, key);
+  }
 }
 
 //functionality
@@ -621,89 +482,6 @@ RC findKey (BTreeHandle *tree, Value *key, RID *result) {
   return RC_OK;
 }
 
-RC insPropagateParent(BTreeHandle *tree, BT_Node *left, BT_Node *right, int key) {
-  BT_Node *parent = left->parent;
-  int index, i;
-  if (parent == NULL) {
-    parent = createBTNode(tree->size, 0, tree->nextPage);
-    saInsertAt(parent->childrenPages, left->pageNum, 0);
-    parent->children[0] = left;
-    tree->nextPage++;
-    tree->whereIsRoot = parent->pageNum;
-    tree->numNodes++;
-    tree->depth++;
-    tree->root = parent;
-    writeBtreeHeader(tree);
-  }
-  right->parent = parent;
-  left->parent = parent;
-  index = saInsert(parent->vals, key);
-  if (index >= 0) {
-    index += 1; // next position is the pointer
-    saInsertAt(parent->childrenPages, right->pageNum, index);
-    for (int i = parent->vals->fill; i > index; i--) {
-      parent->children[i] = parent->children[i - 1];
-    }
-    parent->children[index] = right;
-    return writeNode(parent, tree);
-  }
-  else {
-    // parent is full
-    // Overflowed = parent + 1 new item
-    BT_Node * overflowed = createBTNode(tree->size + 1, 0, -1);
-    overflowed->vals->fill = parent->vals->fill;
-    overflowed->childrenPages->fill = parent->childrenPages->fill;
-    memcpy(overflowed->vals->elems, parent->vals->elems, SIZE_INT * parent->vals->fill);
-    memcpy(overflowed->childrenPages->elems, parent->childrenPages->elems, SIZE_INT * parent->childrenPages->fill);
-    memcpy(overflowed->children, parent->children, sizeof(BT_Node *) * parent->childrenPages->fill);
-    index = saInsert(overflowed->vals, key);
-    saInsertAt(overflowed->childrenPages, right->pageNum, index + 1);
-    for (i = parent->childrenPages->fill; i > index + 1; i--) {
-      overflowed->children[i] = overflowed->children[i - 1];
-    }
-    overflowed->children[index + 1] = right;
-
-    int leftFill = overflowed->vals->fill / 2;
-    int rightFill = overflowed->vals->fill - leftFill;
-    BT_Node *rightParent = createBTNode(tree->size, 0, tree->nextPage);
-    tree->nextPage++;
-    tree->numNodes++;
-    // Since overflowed is sorted then it is safe to just copy the content
-    // copy left
-    parent->vals->fill = leftFill;
-    parent->childrenPages->fill = leftFill + 1;
-    int lptrsSize = parent->childrenPages->fill;
-    memcpy(parent->vals->elems, overflowed->vals->elems, SIZE_INT * leftFill);
-    memcpy(parent->childrenPages->elems, overflowed->childrenPages->elems, SIZE_INT * lptrsSize);
-    memcpy(parent->children, overflowed->children, sizeof(BT_Node *) * lptrsSize);
-
-    // copy right
-    rightParent->vals->fill = rightFill;
-    rightParent->childrenPages->fill = overflowed->childrenPages->fill - lptrsSize;
-    int rptrsSize = rightParent->childrenPages->fill;
-    memcpy(rightParent->vals->elems, overflowed->vals->elems + SIZE_INT * leftFill, SIZE_INT * rightFill);
-    memcpy(rightParent->childrenPages->elems, overflowed->childrenPages->elems + SIZE_INT * lptrsSize, SIZE_INT * rptrsSize);
-    memcpy(rightParent->children, overflowed->children + sizeof(BT_Node *) * lptrsSize, sizeof(BT_Node *) * rptrsSize);
-
-    // always take median to parent
-    key = rightParent->vals->elems[0];
-    saDeleteAt(rightParent->vals, 0, 1);
-
-    // introduce to each other
-    rightParent->right = parent->right;
-    if (rightParent->right != NULL) {
-      rightParent->right->left = rightParent;
-    }
-    parent->right = rightParent;
-    rightParent->left = parent;
-
-    writeNode(parent, tree);
-    writeNode(rightParent, tree);
-    writeBtreeHeader(tree);
-    return insPropagateParent(tree, parent, rightParent, key);
-  }
-}
-
 RC insertKey (BTreeHandle *tree, Value *key, RID rid) {
   BT_Node *leaf = findNodeByKey(tree, key->v.intV);
   if (leaf == NULL) {
@@ -753,9 +531,9 @@ RC insertKey (BTreeHandle *tree, Value *key, RID rid) {
 
     // copy right
     rightLeaf->vals->fill = rightLeaf->leafRIDPages->fill = rightLeaf->leafRIDSlots->fill = rightFill;
-    memcpy(rightLeaf->vals->elems, overflowed->vals->elems + SIZE_INT * leftFill, SIZE_INT * rightFill);
-    memcpy(rightLeaf->leafRIDPages->elems, overflowed->leafRIDPages->elems + SIZE_INT * leftFill, SIZE_INT * rightFill);
-    memcpy(rightLeaf->leafRIDSlots->elems, overflowed->leafRIDSlots->elems + SIZE_INT * leftFill, SIZE_INT * rightFill);
+    memcpy(rightLeaf->vals->elems, overflowed->vals->elems + leftFill, SIZE_INT * rightFill);
+    memcpy(rightLeaf->leafRIDPages->elems, overflowed->leafRIDPages->elems + leftFill, SIZE_INT * rightFill);
+    memcpy(rightLeaf->leafRIDSlots->elems, overflowed->leafRIDSlots->elems + leftFill, SIZE_INT * rightFill);
 
     // introduce to each other
     rightLeaf->right = leaf->right;
@@ -799,13 +577,13 @@ RC openTreeScan (BTreeHandle *tree, BT_ScanHandle **handle){
     scanInfo->currentNode = scanInfo->currentNode->children[0];
   }
   scanInfo->elementIndex = 0;
-  _handle->mgmtData =scanInfo;
+  _handle->mgmtData = scanInfo;
   *handle = _handle;
   return RC_OK;
 }
 
 RC closeTreeScan (BT_ScanHandle *handle){
-  free(handle);
+  freeit(2, handle->mgmtData, handle);
   return RC_OK;
 }
 
@@ -813,162 +591,15 @@ RC nextEntry (BT_ScanHandle *handle, RID *result){
   ScanMgmtInfo *scanInfo = handle->mgmtData;
   if(scanInfo->elementIndex >= scanInfo->currentNode->leafRIDPages->fill) { // finding the left most leaf
     //searchNextNode
-    if(scanInfo->currentNode->right==NULL){
+    if(scanInfo->elementIndex == scanInfo->currentNode->vals->fill && scanInfo->currentNode->right==NULL){
       return RC_IM_NO_MORE_ENTRIES;
     } else {
       scanInfo->currentNode = scanInfo->currentNode->right;
       scanInfo->elementIndex = 0;
     }
   }
-  result->page =scanInfo->currentNode->leafRIDPages->elems[scanInfo->elementIndex];
-  result->slot =scanInfo->currentNode->leafRIDPages->elems[scanInfo->elementIndex];
+  result->page = scanInfo->currentNode->leafRIDPages->elems[scanInfo->elementIndex];
+  result->slot = scanInfo->currentNode->leafRIDSlots->elems[scanInfo->elementIndex];
   scanInfo->elementIndex++;
   return RC_OK;
-}
-
-int main () {
-  /*
-  smartArray *arr = saInit(20);
-  saInsert(arr, 17);
-  saDeleteOne(arr, 17);
-  saInsert(arr, 17);
-  saInsert(arr, 4);
-  saInsert(arr, 5);
-  saInsert(arr, 5);
-  saInsert(arr, 15);
-  saDeleteOne(arr, 5);
-  saDeleteOne(arr, 17);
-  saDeleteOne(arr, 4);
-  saDeleteOne(arr, 5);
-  saDeleteOne(arr, 15);
-  saDeleteOne(arr, 15);
-  saInsert(arr, 17);
-  saInsert(arr, 4);
-  saInsert(arr, 5);
-  saInsert(arr, 5);
-  saInsert(arr, 15);
-  saInsert(arr, 7);
-  saInsert(arr, 13);
-  saInsert(arr, 10);
-  saInsert(arr, 4);
-  saInsert(arr, 10);
-  saInsert(arr, 10);
-  saInsert(arr, 10);
-  saInsert(arr, 8);
-  saInsert(arr, 10);
-  saDeleteAll(arr, 5);
-  saInsert(arr, 5);
-  int fitOn;
-  for (int i = 0; i < 20; i++) {
-    int index = saBinarySearch(arr, i, &fitOn);
-    printf("searching for %d, found?=%s, %son index=%d\n", i, (index < 0) ? "false" : "true", (index < 0) ? "it can fit " : "", fitOn);
-  }
-  saDestroy(arr);
-  //*/
-  int n = 2;
-  char *name = "myIndex";
-  createBtree (name, DT_INT, n);
-  BTreeHandle *tree;
-  openBtree(&tree, name);
-
-  //----------------Non Leaf Node-------------------------------
-  /*
-  BT_Node *node = createBTNode(4, 0);
-  int index;
-  index = saInsert(node->vals, 1214237423);
-  saInsertAt(node->childrenPages, 2, index);
-  index = saInsert(node->vals, 1514234234);
-  saInsertAt(node->childrenPages, 3, index);
-  index = saInsert(node->vals, 1314234234);
-  saInsertAt(node->childrenPages, 4, index);
-  saInsertAt(node->childrenPages, 5, node->childrenPages->fill);
-  writeNode(node, tree);
-  destroyBTNode(node);
-  //*/
-
-  /*
-  BT_Node *nodeNew = NULL;
-  readNode(&nodeNew, tree, 1);
-  printNode(nodeNew);
-  destroyBTNode(nodeNew);
-  //*/
-  //-----------------------------------------------
-
-  //--------------Leaf Node---------------------------------
-  /*
-  node = createBTNode(4, 1);
-  index = saInsert(node->vals, 1244324234);
-  saInsertAt(node->leafRIDPages, 2, index);
-  saInsertAt(node->leafRIDSlots, 2, index);
-  index = saInsert(node->vals, 1544234234);
-  saInsertAt(node->leafRIDPages, 3, index);
-  saInsertAt(node->leafRIDSlots, 3, index);
-  index = saInsert(node->vals, 1344234344);
-  saInsertAt(node->leafRIDPages, 4, index);
-  saInsertAt(node->leafRIDSlots, 4, index);
-  writeNode(node, tree);
-  destroyBTNode(node);
-  //*/
-
-  /*
-  readNode(&nodeNew, tree, 2);
-  printNode(nodeNew);
-  destroyBTNode(nodeNew);
-  //*/
-
-  //-----------------------------------------------
-
-  createTestBTree2(tree);
-  tree->depth = 5;
-  tree->numNodes = 31;
-  tree->whereIsRoot = 31;
-  writeBtreeHeader(tree);
-  //-----------------------------------------------
-
-  /*
-  int result;
-  getNumNodes(tree, &result);
-  printf("\nNum Nodes : %d",result);
-
-  getNumEntries(tree, &result);
-  printf("\nNum Entries : %d",result);
-
-  DataType dataType;
-  getKeyType(tree, &dataType);
-  //*/
-  //-----------------------------------------------
-  closeBtree(tree);
-  BTreeHandle *fullTree;
-  openBtree(&fullTree, name);
-  printNode(fullTree->root->children[0]->children[1]->right);
-
-  BT_ScanHandle *handle;
-  openTreeScan(fullTree, &handle);
-  RID *result = new(RID);
-  while (nextEntry(handle, result) != RC_IM_NO_MORE_ENTRIES) {
-    printf("\nRID: %d.%d\n", result->page,result->slot);
-  }
-  closeTreeScan(handle);
-
-  int val[18] = {1,20,25,28,29,30,33,35,39,40,43,45,49,50,52,60,70,99};
-  Value *key = new(Value);
-  for(int i=0;i<18;i++){
-    key->v.intV = val[i];
-    RC rc = findKey (fullTree, key, result);
-    if(RC_OK == rc)
-      printf("\nRID--------------: %d.%d\n", result->page,result->slot);
-    else{
-      printf("\nNot found \n");
-    }
-
-    if(result->page!=i){
-      printf("ERROR.......!!!!!\n");
-    }
-  }
-  free(key);
-  closeBtree(fullTree);
-  free(result);
-  //deleteBtree(name);
-
-  return 0;
 }
