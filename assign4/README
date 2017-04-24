@@ -42,9 +42,9 @@ CONFIGURE Memory Leaks Check
 
 3. Place a debug point at starting point and last point
 
-4. Open instruments ( an easy way is —> Run test_memory_leaks.c -> On the left panel, click on Memory. When the window opens, click on “Profile in instruments”.
+4. Open instruments
 
-5. Run the c program and note the processed displayed in the left panel. The program should stop at the first debug point.
+5. Run the test files and note the processed displayed in the left panel. The program should stop at the first debug point.
 
 6. Go to Instruments and click on record. Select the process with the process id we noted in previous step.
 
