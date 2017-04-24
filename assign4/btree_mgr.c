@@ -51,6 +51,36 @@ void destroyBTNode(BT_Node *node) {
   free(node);
 }
 
+RC printNodeHelper(BT_Node *node, char *result) {
+  
+  if (node == NULL) {
+    sprintf(result+ strlen(result),"NULL Node !!\n");
+    return RC_GENERAL_ERROR;
+  }
+  sprintf(result + strlen(result), "(%d)[", node->pageNum);
+  
+  int i;
+  if(node->isLeaf){
+    for (i = 0; i < node->vals->fill; i++) {
+      sprintf(result + strlen(result),"%d", node->leafRIDPages->elems[i]);
+      sprintf(result + strlen(result),".%d,", node->leafRIDSlots->elems[i]);
+      sprintf(result + strlen(result),"%d", node->vals->elems[i]);
+      if(i < node->vals->fill-1){
+        sprintf(result + strlen(result),",");
+      }
+    }
+  } else {
+    for (i = 0; i < node->vals->fill; i++) {
+      sprintf(result + strlen(result),"%d,", node->childrenPages->elems[i]);
+      sprintf(result + strlen(result),"%d,", node->vals->elems[i]);
+    }
+    sprintf(result + strlen(result),"%d", node->childrenPages->elems[i]);
+  }
+  sprintf(result+strlen(result), "]\n");
+  //printf("%s\n", result);
+  return RC_OK;
+}
+
 RC readNode(BT_Node **node, BTreeHandle *tree, int pageNum) {
   RC err;
   BM_PageHandle *page = new(BM_PageHandle);
@@ -630,4 +660,31 @@ RC nextEntry (BT_ScanHandle *handle, RID *result){
   result->slot = scanInfo->currentNode->leafRIDSlots->elems[scanInfo->elementIndex];
   scanInfo->elementIndex++;
   return RC_OK;
+}
+
+char *printTree (BTreeHandle *tree){
+  int size = tree->numNodes * tree->size * 11 + tree->size + 14 + tree->numNodes;
+  char *result = newCharArr(size);
+  BT_Node *node = tree->root;
+  int level=0;
+  while(node!=NULL){
+    printNodeHelper(node, result);
+    //sprintf(result+strlen(result), "%s",result);
+    
+    if(node->isLeaf){
+      node = node->right;
+    } else {
+      if(NULL == node->right){
+        BT_Node *temp = tree->root;
+        for(int j=0; j<=level;j++){
+          temp=temp->children[0];
+        }
+        node = temp;
+        level++;
+      } else {
+        node = node->right;
+      }
+    }
+  }
+  return result;
 }
