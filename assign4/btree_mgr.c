@@ -632,6 +632,7 @@ RC insPropagateParent(BTreeHandle *tree, BT_Node *left, BT_Node *right, int key)
     tree->nextPage++;
     tree->whereIsRoot = parent->pageNum;
     tree->numNodes++;
+    tree->depth++;
     tree->root = parent;
     writeBtreeHeader(tree);
   }
@@ -706,7 +707,15 @@ RC insPropagateParent(BTreeHandle *tree, BT_Node *left, BT_Node *right, int key)
 
 RC insertKey (BTreeHandle *tree, Value *key, RID rid) {
   BT_Node *leaf = findNodeByKey(tree, key->v.intV);
-  // TODO if leaf is null; create it
+  if (leaf == NULL) {
+    leaf = createBTNode(tree->size, 1, tree->nextPage);
+    tree->nextPage++;
+    tree->whereIsRoot = leaf->pageNum;
+    tree->numNodes++;
+    tree->depth++;
+    tree->root = leaf;
+    writeBtreeHeader(tree);
+  }
   int index, fitOn;
   index = saBinarySearch(leaf->vals, key->v.intV, &fitOn);
   if (index >= 0) {
