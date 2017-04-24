@@ -5,6 +5,7 @@
 #include "buffer_mgr.h"
 #include <stdarg.h>
 #include <unistd.h>
+#include <math.h>
 
 // helpers
 
@@ -17,10 +18,11 @@ void freeit(int num, ...) {
   va_end(valist);
 }
 
-BT_Node *createBTNode(int size, int isLeaf) {
+BT_Node *createBTNode(int size, int isLeaf, int pageNum) {
   BT_Node *node = new(BT_Node); // TODO free it, Done in destroyBTNode
   node->isLeaf = isLeaf;
   node->size = size;
+  node->pageNum = pageNum;
   node->vals = saInit(size);
   node->right = NULL;
   node->left = NULL;
@@ -63,7 +65,7 @@ RC readNode(BT_Node **node, BTreeHandle *tree, int pageNum) {
   int filled;
   memcpy(&filled, ptr, SIZE_INT);
   ptr = page->data + 10 * SIZE_INT; // skip 40 bytes for header of the node
-  BT_Node *_node = createBTNode(tree->size, isLeaf); // TODO destroyBTNode
+  BT_Node *_node = createBTNode(tree->size, isLeaf, pageNum); // TODO destroyBTNode
   int value, i;
   if (!isLeaf) {
     int childPage;
@@ -99,10 +101,10 @@ RC readNode(BT_Node **node, BTreeHandle *tree, int pageNum) {
   return err;
 }
 
-RC writeNode(BT_Node *node, BTreeHandle *tree, int pageNum) {
+RC writeNode(BT_Node *node, BTreeHandle *tree) {
   RC err;
   BM_PageHandle *page = new(BM_PageHandle);
-  if (RC_OK!=(err = pinPage(tree->mgmtData, page, pageNum))) {
+  if (RC_OK!=(err = pinPage(tree->mgmtData, page, node->pageNum))) {
     free(page);
     return err;
   }
@@ -170,27 +172,27 @@ void printNode(BT_Node *node) {
 }
 
 RC gwn(BTreeHandle *tree, int pageNum, int size, int fill, int *vals, int *ptrs) {
-  BT_Node *node = createBTNode(size, 0);
+  BT_Node *node = createBTNode(size, 0, pageNum);
   int index, i;
   for (i = 0; i < fill; i++) {
     index = saInsert(node->vals, vals[i]);
     saInsertAt(node->childrenPages, ptrs[i], index);
   }
   saInsertAt(node->childrenPages, ptrs[i], node->childrenPages->fill);
-  RC err = writeNode(node, tree, pageNum);
+  RC err = writeNode(node, tree);
   destroyBTNode(node);
   return err;
 }
 
 RC gwl(BTreeHandle *tree, int pageNum, int size, int fill, int *vals, int *ridP, int *ridS) {
-  BT_Node *node = createBTNode(size, 1);
+  BT_Node *node = createBTNode(size, 1, pageNum);
   int index, i;
   for (i = 0; i < fill; i++) {
     index = saInsert(node->vals, vals[i]);
     saInsertAt(node->leafRIDPages, ridP[i], index);
     saInsertAt(node->leafRIDSlots, ridS[i], index);
   }
-  RC err = writeNode(node, tree, pageNum);
+  RC err = writeNode(node, tree);
   destroyBTNode(node);
   return err;
 }
@@ -270,6 +272,8 @@ RC writeBtreeHeader(BTreeHandle *tree) {
   memcpy(ptr, &tree->numEntries, SIZE_INT);
   ptr += SIZE_INT;
   memcpy(ptr, &tree->depth, SIZE_INT);
+  ptr += SIZE_INT;
+  memcpy(ptr, &tree->nextPage, SIZE_INT);
   err = markDirty(bm, page);
   err = unpinPage(bm, page);
   forceFlushPool(bm);
@@ -513,6 +517,9 @@ RC createBtree (char *idxId, DataType keyType, int n)
   ptr += SIZE_INT;
   int depth = 0;
   memcpy(ptr, &depth, SIZE_INT);
+  int nextPage = 1;
+  ptr += SIZE_INT;
+  memcpy(ptr, &nextPage, SIZE_INT);
 
   if (RC_OK != (rc = writeBlock(0, fHandle, header))) {
     free(fHandle);
@@ -553,6 +560,8 @@ RC openBtree (BTreeHandle **tree, char *idxId){
   memcpy(&_tree->numEntries, ptr, SIZE_INT);
   ptr += SIZE_INT;
   memcpy(&_tree->depth, ptr, SIZE_INT);
+  ptr += SIZE_INT;
+  memcpy(&_tree->nextPage, ptr, SIZE_INT);
 
   if ((err = unpinPage(bm, pageHandle)) != RC_OK) {
     freeit(1, pageHandle);
@@ -610,6 +619,149 @@ RC findKey (BTreeHandle *tree, Value *key, RID *result) {
   }
   result->page = leaf->leafRIDPages->elems[index];
   result->slot = leaf->leafRIDSlots->elems[index];
+  return RC_OK;
+}
+
+RC insPropagateParent(BTreeHandle *tree, BT_Node *left, BT_Node *right, int key) {
+  BT_Node *parent = left->parent;
+  int index, i;
+  if (parent == NULL) {
+    parent = createBTNode(tree->size, 0, tree->nextPage);
+    saInsertAt(parent->childrenPages, left->pageNum, 0);
+    parent->children[0] = left;
+    tree->nextPage++;
+    tree->whereIsRoot = parent->pageNum;
+    tree->numNodes++;
+    tree->root = parent;
+    writeBtreeHeader(tree);
+  }
+  right->parent = parent;
+  left->parent = parent;
+  index = saInsert(parent->vals, key);
+  if (index >= 0) {
+    index += 1; // next position is the pointer
+    saInsertAt(parent->childrenPages, right->pageNum, index);
+    for (int i = parent->vals->fill; i > index; i--) {
+      parent->children[i] = parent->children[i - 1];
+    }
+    parent->children[index] = right;
+    return writeNode(parent, tree);
+  }
+  else {
+    // parent is full
+    // Overflowed = parent + 1 new item
+    BT_Node * overflowed = createBTNode(tree->size + 1, 0, -1);
+    overflowed->vals->fill = parent->vals->fill;
+    overflowed->childrenPages->fill = parent->childrenPages->fill;
+    memcpy(overflowed->vals->elems, parent->vals->elems, SIZE_INT * parent->vals->fill);
+    memcpy(overflowed->childrenPages->elems, parent->childrenPages->elems, SIZE_INT * parent->childrenPages->fill);
+    memcpy(overflowed->children, parent->children, sizeof(BT_Node *) * parent->childrenPages->fill);
+    index = saInsert(overflowed->vals, key);
+    saInsertAt(overflowed->childrenPages, right->pageNum, index + 1);
+    for (i = parent->childrenPages->fill; i > index + 1; i--) {
+      overflowed->children[i] = overflowed->children[i - 1];
+    }
+    overflowed->children[index + 1] = right;
+
+    int leftFill = overflowed->vals->fill / 2;
+    int rightFill = overflowed->vals->fill - leftFill;
+    BT_Node *rightParent = createBTNode(tree->size, 0, tree->nextPage);
+    tree->nextPage++;
+    tree->numNodes++;
+    // Since overflowed is sorted then it is safe to just copy the content
+    // copy left
+    parent->vals->fill = leftFill;
+    parent->childrenPages->fill = leftFill + 1;
+    int lptrsSize = parent->childrenPages->fill;
+    memcpy(parent->vals->elems, overflowed->vals->elems, SIZE_INT * leftFill);
+    memcpy(parent->childrenPages->elems, overflowed->childrenPages->elems, SIZE_INT * lptrsSize);
+    memcpy(parent->children, overflowed->children, sizeof(BT_Node *) * lptrsSize);
+
+    // copy right
+    rightParent->vals->fill = rightFill;
+    rightParent->childrenPages->fill = overflowed->childrenPages->fill - lptrsSize;
+    int rptrsSize = rightParent->childrenPages->fill;
+    memcpy(rightParent->vals->elems, overflowed->vals->elems + SIZE_INT * leftFill, SIZE_INT * rightFill);
+    memcpy(rightParent->childrenPages->elems, overflowed->childrenPages->elems + SIZE_INT * lptrsSize, SIZE_INT * rptrsSize);
+    memcpy(rightParent->children, overflowed->children + sizeof(BT_Node *) * lptrsSize, sizeof(BT_Node *) * rptrsSize);
+
+    // always take median to parent
+    key = rightParent->vals->elems[0];
+    saDeleteAt(rightParent->vals, 0, 1);
+
+    // introduce to each other
+    rightParent->right = parent->right;
+    if (rightParent->right != NULL) {
+      rightParent->right->left = rightParent;
+    }
+    parent->right = rightParent;
+    rightParent->left = parent;
+
+    writeNode(parent, tree);
+    writeNode(rightParent, tree);
+    writeBtreeHeader(tree);
+    return insPropagateParent(tree, parent, rightParent, key);
+  }
+}
+
+RC insertKey (BTreeHandle *tree, Value *key, RID rid) {
+  BT_Node *leaf = findNodeByKey(tree, key->v.intV);
+  // TODO if leaf is null; create it
+  int index, fitOn;
+  index = saBinarySearch(leaf->vals, key->v.intV, &fitOn);
+  if (index >= 0) {
+    return RC_IM_KEY_ALREADY_EXISTS;
+  }
+  index = saInsert(leaf->vals, key->v.intV);
+  if (index >= 0) {
+    saInsertAt(leaf->leafRIDPages, rid.page, index);
+    saInsertAt(leaf->leafRIDSlots, rid.slot, index);
+  }
+  else {
+    // leaf is full
+    // Overflowed = leaf + 1 new item
+    BT_Node * overflowed = createBTNode(tree->size + 1, 1, -1);
+    memcpy(overflowed->vals->elems, leaf->vals->elems, SIZE_INT * leaf->vals->fill);
+    overflowed->vals->fill = leaf->vals->fill;
+    memcpy(overflowed->leafRIDPages->elems, leaf->leafRIDPages->elems, SIZE_INT * leaf->leafRIDPages->fill);
+    overflowed->leafRIDPages->fill = leaf->leafRIDPages->fill;
+    memcpy(overflowed->leafRIDSlots->elems, leaf->leafRIDSlots->elems, SIZE_INT * leaf->leafRIDSlots->fill);
+    overflowed->leafRIDSlots->fill = leaf->leafRIDSlots->fill;
+    index = saInsert(overflowed->vals, key->v.intV);
+    saInsertAt(overflowed->leafRIDPages, rid.page, index);
+    saInsertAt(overflowed->leafRIDSlots, rid.slot, index);
+
+    int leftFill = ceil((float) overflowed->vals->fill / 2);
+    int rightFill = overflowed->vals->fill - leftFill;
+    BT_Node *rightLeaf = createBTNode(tree->size, 1, tree->nextPage);
+    tree->nextPage++;
+    tree->numNodes++;
+    // Since overflowed is sorted then it is safe to just copy the content
+    // copy left
+    leaf->vals->fill = leaf->leafRIDPages->fill = leaf->leafRIDSlots->fill = leftFill;
+    memcpy(leaf->vals->elems, overflowed->vals->elems, SIZE_INT * leftFill);
+    memcpy(leaf->leafRIDPages->elems, overflowed->leafRIDPages->elems, SIZE_INT * leftFill);
+    memcpy(leaf->leafRIDSlots->elems, overflowed->leafRIDSlots->elems, SIZE_INT * leftFill);
+
+    // copy right
+    rightLeaf->vals->fill = rightLeaf->leafRIDPages->fill = rightLeaf->leafRIDSlots->fill = rightFill;
+    memcpy(rightLeaf->vals->elems, overflowed->vals->elems + SIZE_INT * leftFill, SIZE_INT * rightFill);
+    memcpy(rightLeaf->leafRIDPages->elems, overflowed->leafRIDPages->elems + SIZE_INT * leftFill, SIZE_INT * rightFill);
+    memcpy(rightLeaf->leafRIDSlots->elems, overflowed->leafRIDSlots->elems + SIZE_INT * leftFill, SIZE_INT * rightFill);
+
+    // introduce to each other
+    rightLeaf->right = leaf->right;
+    if (rightLeaf->right != NULL) {
+      rightLeaf->right->left = rightLeaf;
+    }
+    leaf->right = rightLeaf;
+    rightLeaf->left = leaf;
+    writeNode(rightLeaf, tree);
+    writeNode(leaf, tree);
+    insPropagateParent(tree, leaf, rightLeaf, rightLeaf->vals->elems[0]);
+  }
+  tree->numEntries++;
+  writeBtreeHeader(tree);
   return RC_OK;
 }
 
@@ -705,7 +857,7 @@ int main () {
   index = saInsert(node->vals, 1314234234);
   saInsertAt(node->childrenPages, 4, index);
   saInsertAt(node->childrenPages, 5, node->childrenPages->fill);
-  writeNode(node, tree, 1);
+  writeNode(node, tree);
   destroyBTNode(node);
   //*/
 
@@ -729,7 +881,7 @@ int main () {
   index = saInsert(node->vals, 1344234344);
   saInsertAt(node->leafRIDPages, 4, index);
   saInsertAt(node->leafRIDSlots, 4, index);
-  writeNode(node, tree, 2);
+  writeNode(node, tree);
   destroyBTNode(node);
   //*/
 

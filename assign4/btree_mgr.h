@@ -8,6 +8,7 @@
 typedef struct BT_Node {
   int size; // values size
   int isLeaf;
+  int pageNum;
   smartArray *vals;
   smartArray *childrenPages;
   smartArray *leafRIDPages;
@@ -29,6 +30,7 @@ typedef struct BTreeHandle {
   int numNodes;
   int depth;
   int whereIsRoot;
+  int nextPage;
   BT_Node *root;
   void *mgmtData;
 } BTreeHandle;
@@ -44,7 +46,7 @@ typedef struct ScanMgmtInfo {
 } ScanMgmtInfo;
 
 // Node functions
-BT_Node *createBTNode(int size, int isLeaf);
+BT_Node *createBTNode(int size, int isLeaf, int pageNum);
 
 // init and shutdown index manager
 extern RC initIndexManager (void *mgmtData);
