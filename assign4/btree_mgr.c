@@ -65,7 +65,7 @@ RC readNode(BT_Node **node, BTreeHandle *tree, int pageNum) {
   ptr += SIZE_INT;
   int filled;
   memcpy(&filled, ptr, SIZE_INT);
-  ptr = page->data + 10 * SIZE_INT; // skip 40 bytes for header of the node
+  ptr = page->data + BYTES_BT_HEADER_LEN; // skip header bytes of the node
   BT_Node *_node = createBTNode(tree->size, isLeaf, pageNum); // TODO destroyBTNode
   int value, i;
   if (!isLeaf) {
@@ -114,7 +114,7 @@ RC writeNode(BT_Node *node, BTreeHandle *tree) {
   memcpy(ptr, &node->isLeaf, SIZE_INT);
   ptr += SIZE_INT;
   memcpy(ptr, &node->vals->fill, SIZE_INT);
-  ptr = page->data + 10 * SIZE_INT; // skip 40 bytes for header of the node
+  ptr = page->data + BYTES_BT_HEADER_LEN; // skip header bytes of the node
 
   int i;
   if (!node->isLeaf) {
@@ -374,6 +374,9 @@ RC shutdownIndexManager () {
 
 RC createBtree (char *idxId, DataType keyType, int n)
 {
+  if (n > (PAGE_SIZE - BYTES_BT_HEADER_LEN) / (3 * SIZE_INT)) { // 3 for the leaf case where u need 1 for key, 1 for page, and 1 for slot
+    return RC_IM_N_TO_LAGE;
+  }
   RC rc;
   if(RC_OK!= (rc = createPageFile (idxId))){
     return rc;

@@ -29,6 +29,9 @@
 /* Number of bits in byte */
 #define NUM_BITS 8
 
+/* Number of bytes for each btree node header */
+#define BYTES_BT_HEADER_LEN 40
+
 /* DB path configuration */
 #define PATH_DIR "/tmp/database_ado/"
 #define DEFAULT_MODE 0777
