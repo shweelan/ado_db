@@ -52,13 +52,12 @@ void destroyBTNode(BT_Node *node) {
 }
 
 RC printNodeHelper(BT_Node *node, char *result) {
-  
   if (node == NULL) {
     sprintf(result+ strlen(result),"NULL Node !!\n");
     return RC_GENERAL_ERROR;
   }
   sprintf(result + strlen(result), "(%d)[", node->pageNum);
-  
+
   int i;
   if(node->isLeaf){
     for (i = 0; i < node->vals->fill; i++) {
@@ -349,6 +348,8 @@ RC insPropagateParent(BTreeHandle *tree, BT_Node *left, BT_Node *right, int key)
     memcpy(rightParent->childrenPages->elems, overflowed->childrenPages->elems + lptrsSize, SIZE_INT * rptrsSize);
     memcpy(rightParent->children, overflowed->children + lptrsSize, sizeof(BT_Node *) * rptrsSize);
 
+    destroyBTNode(overflowed);
+
     // always take median to parent
     key = rightParent->vals->elems[0];
     saDeleteAt(rightParent->vals, 0, 1);
@@ -498,7 +499,7 @@ RC openBtree (BTreeHandle **tree, char *idxId){
 RC closeBtree (BTreeHandle *tree){
   shutdownBufferPool(tree->mgmtData);
   freeNodes(tree->root);
-  free(tree);
+  freeit(2, tree->mgmtData, tree);
   return RC_OK;
 }
 
@@ -593,6 +594,8 @@ RC insertKey (BTreeHandle *tree, Value *key, RID rid) {
     memcpy(rightLeaf->leafRIDPages->elems, overflowed->leafRIDPages->elems + leftFill, SIZE_INT * rightFill);
     memcpy(rightLeaf->leafRIDSlots->elems, overflowed->leafRIDSlots->elems + leftFill, SIZE_INT * rightFill);
 
+    destroyBTNode(overflowed);
+
     // introduce to each other
     rightLeaf->right = leaf->right;
     if (rightLeaf->right != NULL) {
@@ -669,8 +672,6 @@ char *printTree (BTreeHandle *tree){
   int level=0;
   while(node!=NULL){
     printNodeHelper(node, result);
-    //sprintf(result+strlen(result), "%s",result);
-    
     if(node->isLeaf){
       node = node->right;
     } else {
