@@ -248,7 +248,6 @@ RC loadBtree(BTreeHandle *tree) {
       return err;
     }
   }
-  printf("depth = %d\n", tree->depth);
   return RC_OK;
 }
 
@@ -771,6 +770,23 @@ RC insertKey (BTreeHandle *tree, Value *key, RID rid) {
   }
   tree->numEntries++;
   writeBtreeHeader(tree);
+  return RC_OK;
+}
+
+RC deleteKey (BTreeHandle *tree, Value *key) {
+  BT_Node *leaf = findNodeByKey(tree, key->v.intV);
+  if (leaf != NULL) {
+    int index, _unused;
+    index = saBinarySearch(leaf->vals, key->v.intV, &_unused);
+    if (index >= 0) {
+      saDeleteAt(leaf->vals, index, 1);
+      saDeleteAt(leaf->leafRIDPages, index, 1);
+      saDeleteAt(leaf->leafRIDSlots, index, 1);
+      tree->numEntries--;
+      writeNode(leaf, tree);
+      writeBtreeHeader(tree);
+    }
+  }
   return RC_OK;
 }
 
