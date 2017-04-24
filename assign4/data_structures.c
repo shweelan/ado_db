@@ -124,6 +124,7 @@ void hmDestroy(HM *hm) {
 
 
 void saPrint(smartArray *arr) {
+  return;
   printf("------------------------\n");
   printf("[ ");
   for(int i = 0; i < arr->fill; i++) {
@@ -142,7 +143,6 @@ int saBinarySearch(smartArray *arr, int elem, int *fitOn) {
     return -1;
   }
   int pos;
-  //printf("\n\n");
   while(1) {
     pos = (first + last) / 2;
     //printf("first=%d last=%d pos=%d val=%d\n", first, last, pos, arr->elems[pos]);
@@ -204,7 +204,7 @@ int saInsert(smartArray *arr, int elem) {
   int fitOn = -1; // not more place
   if (arr->size > arr->fill) {
     int index = saBinarySearch(arr, elem, &fitOn);
-    printf("inserting %d, found?=%s, will fit on index=%d\n", elem, (index < 0) ? "false" : "true", fitOn);
+    //printf("inserting %d, found?=%s, will fit on index=%d\n", elem, (index < 0) ? "false" : "true", fitOn);
     fitOn = saInsertAt(arr, elem, fitOn);
   }
   saPrint(arr);
@@ -223,7 +223,7 @@ void saDeleteAt(smartArray *arr, int index, int count) {
 int saDeleteOne(smartArray *arr, int elem) {
   int _unused;
   int index = saBinarySearch(arr, elem, &_unused);
-  printf("deleteing %d, found?=%s, will delete from index=%d\n", elem, (index < 0) ? "false" : "true", index);
+  //printf("deleteing %d, found?=%s, will delete from index=%d\n", elem, (index < 0) ? "false" : "true", index);
   if (index >= 0) {
     saDeleteAt(arr, index, 1);
   }
@@ -235,7 +235,7 @@ int saDeleteOne(smartArray *arr, int elem) {
 int saDeleteAll(smartArray *arr, int elem) {
   int _unused;
   int index = saBinarySearch(arr, elem, &_unused);
-  printf("deleteing all %d, found?=%s, will delete from index=%d\n", elem, (index < 0) ? "false" : "true", index);
+  //printf("deleteing all %d, found?=%s, will delete from index=%d\n", elem, (index < 0) ? "false" : "true", index);
   if (index >= 0) {
     int count = 1;
     while(index + count < arr->fill && elem == arr->elems[index + count]) {
