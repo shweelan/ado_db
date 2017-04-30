@@ -54,7 +54,7 @@ extern void freeVal(Value *val);
       (_result)->v.intV = _input->v.intV;					\
       break;								\
     case DT_STRING:							\
-      (_result)->v.stringV = (char *) malloc(strlen(_input->v.stringV) + 1);	\
+      (_result)->v.stringV = (char *) malloc(strlen(_input->v.stringV));	\
       strcpy((_result)->v.stringV, _input->v.stringV);			\
       break;								\
     case DT_FLOAT:							\

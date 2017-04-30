@@ -3,11 +3,35 @@
 
 #include "dberror.h"
 #include "tables.h"
+#include "data_structures.h"
+
+typedef struct BT_Node {
+  int size; // values size
+  int isLeaf;
+  int pageNum;
+  smartArray *vals;
+  smartArray *childrenPages;
+  smartArray *leafRIDPages;
+  smartArray *leafRIDSlots;
+  // tree pointers
+  struct BT_Node **children; // in all but in leaf
+  struct BT_Node *parent; // in all but in root
+  struct BT_Node *left; // in all but in root
+  struct BT_Node *right; // in all but in root
+} BT_Node;
+
 
 // structure for accessing btrees
 typedef struct BTreeHandle {
   DataType keyType;
   char *idxId;
+  int size;
+  int numEntries;
+  int numNodes;
+  int depth;
+  int whereIsRoot;
+  int nextPage;
+  BT_Node *root;
   void *mgmtData;
 } BTreeHandle;
 
@@ -15,6 +39,14 @@ typedef struct BT_ScanHandle {
   BTreeHandle *tree;
   void *mgmtData;
 } BT_ScanHandle;
+
+typedef struct ScanMgmtInfo {
+  BT_Node *currentNode;
+  int elementIndex;
+} ScanMgmtInfo;
+
+// Node functions
+BT_Node *createBTNode(int size, int isLeaf, int pageNum);
 
 // init and shutdown index manager
 extern RC initIndexManager (void *mgmtData);
