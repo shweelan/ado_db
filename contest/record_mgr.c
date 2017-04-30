@@ -401,7 +401,7 @@ RC openTable (RM_TableData *rel, char *name) {
 
 int getNumTuples (RM_TableData *rel) {
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
-  forceFlushPool(bm);
+  //forceFlushPool(bm);
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   SM_FileHandle *fHandle = pmi->fHandle;
   int totalNumDataPages = fHandle->totalNumPages - TABLE_HEADER_PAGES_LEN;
@@ -719,7 +719,7 @@ RC updateRecord (RM_TableData *rel, Record *record) {
 //start scan
 RC startScan (RM_TableData *rel, RM_ScanHandle *scan, Expr *cond) {
   BM_BufferPool *bm = (BM_BufferPool *) rel->mgmtData;
-  forceFlushPool(bm);
+  //forceFlushPool(bm);
   ScanMgmtInfo *smi = new(ScanMgmtInfo);
   PoolMgmtInfo *pmi = (PoolMgmtInfo *)(bm->mgmtData);
   SM_FileHandle *fHandle = pmi->fHandle;

@@ -167,7 +167,7 @@ RC writeNode(BT_Node *node, BTreeHandle *tree) {
   }
   err = markDirty(tree->mgmtData, page);
   err = unpinPage(tree->mgmtData, page);
-  forceFlushPool(tree->mgmtData);
+  //forceFlushPool(tree->mgmtData);
   free(page);
   return err;
 }
@@ -279,7 +279,7 @@ RC writeBtreeHeader(BTreeHandle *tree) {
   memcpy(ptr, &tree->nextPage, SIZE_INT);
   err = markDirty(bm, page);
   err = unpinPage(bm, page);
-  forceFlushPool(bm);
+  //forceFlushPool(bm);
   freeit(1, page);
   return err;
 }

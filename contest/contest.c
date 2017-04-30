@@ -86,8 +86,10 @@ singleWorkload1 (int size, int numRequests, int numPages, double *t, long *ios)
   // insert rows into table
   for(i = 0; i < size; i++)
     {
-      r = record1(schema, i, randomString(4), randomInt(0, size / 100));
+      char * str = randomString(4);
+      r = record1(schema, i, str, randomInt(0, size / 100));
       TEST_CHECK(insertRecord(table,r));
+      free(str);
       freeRecord(r);
     }
 
@@ -129,7 +131,7 @@ singleWorkload1 (int size, int numRequests, int numPages, double *t, long *ios)
   // measure time
   endTime = time(NULL);
   (*t) += difftime(endTime,startTime);
-  (*ios) += getContestIOs();
+  (*ios) += getContestIOs(table->mgmtData);
   printf("\nworkload 1 - N(R)=<%i>, #scans=<%i>, M=<%i>: %f sec, %ld I/Os\n", size, numRequests, numPages, *t, *ios);
   
   // clean up
@@ -275,7 +277,7 @@ singleWorkload2 (int size, int numRequests, int numPages, int percInserts, int s
   // measure time
   endTime = time(NULL);
   (*t) += difftime(endTime,startTime);
-  (*ios) += getContestIOs();
+  (*ios) += getContestIOs(table->mgmtData);
   printf("\nworkload 2 - N(R)=<%i>, #scans=<%i>, M=<%i>: %f sec, %ld I/Os\n", size, numRequests, numPages, *t, *ios);
 
   // clean up
