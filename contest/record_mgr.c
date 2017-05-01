@@ -9,6 +9,8 @@
 #include <math.h>
 
 
+// current buffer manager num of pages
+int currentBufSize = PER_TBL_BUF_SIZE + 1; // +1 for bitmap always fixed page
 
 // helpers
 //Creates new string and copies the value
@@ -339,6 +341,13 @@ RC changePageFillBit(RM_TableData *rel, int pageNum, bool bitVal) {
 
 
 RC initRecordManager (void *mgmtData) {
+  if (mgmtData != NULL) {
+    int bufSize = *((int*)mgmtData);
+    currentBufSize = bufSize + 1; // +1 for bitmap always fixed page
+  }
+  else {
+    currentBufSize = PER_TBL_BUF_SIZE + 1; // +1 for bitmap always fixed page
+  }
   initStorageManager();
   return RC_OK;
 }
@@ -378,7 +387,7 @@ RC openTable (RM_TableData *rel, char *name) {
   RC err;
   BM_BufferPool *bm = new(BM_BufferPool);
   BM_PageHandle *pageHandle;
-  if ((err = initBufferPool(bm, name, PER_TBL_BUF_SIZE, RS_LRU, NULL))) {
+  if ((err = initBufferPool(bm, name, currentBufSize, RS_LRU, NULL))) {
     free(bm);
     return err;
   }

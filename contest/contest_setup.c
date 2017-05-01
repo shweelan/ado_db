@@ -11,7 +11,7 @@ RC
 setUpContest (int numPages)
 {
   initStorageManager();
-  initRecordManager(NULL);
+  initRecordManager(&numPages);
   return RC_OK;
 }
 
