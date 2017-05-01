@@ -29,7 +29,7 @@ getContestIOs (BM_BufferPool *const bm)
 {
   int numR = getNumReadIO(bm);
   int numW = getNumWriteIO(bm);
-  printf("#Num of readIO: %d, #Num of Bytes Read: %f MB\n", numR, (float)(numR * PAGE_SIZE) / (1024 * 1024));
+  printf("\n#Num of readIO: %d, #Num of Bytes Read: %f MB\n", numR, (float)(numR * PAGE_SIZE) / (1024 * 1024));
   printf("#Num of writeIO: %d, #Num of Bytes Written: %f MB\n", numW, (float)(numW * PAGE_SIZE) / (1024 * 1024));
   return numR + numW;
 }

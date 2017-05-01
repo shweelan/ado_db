@@ -7,6 +7,7 @@
   reading smaller or larger that are not power of 2 blocks will waste bytes already feched by the file system
 */
 // Made the page size * 2, to have bigger bitmap since our bitmap design is a single page, on testing 100,000,000 records it exceeds
+// This is actually hurts performance, but we are forced to
 #define PAGE_SIZE 8192 * 2
 
 /* Schema Stringify delimiter */
