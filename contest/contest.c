@@ -82,14 +82,14 @@ singleWorkload1 (int size, int numRequests, int numPages, double *t, long *ios)
   // create table and insert data
   TEST_CHECK(createTable("test_table_r",schema));
   TEST_CHECK(openTable(table, "test_table_r"));
-  
+
   // insert rows into table
   for(i = 0; i < size; i++)
     {
       char * str = randomString(4);
       r = record1(schema, i, str, randomInt(0, size / 100));
       TEST_CHECK(insertRecord(table,r));
-      free(str);
+      free(str); //Additional code since string needs to be freed
       freeRecord(r);
     }
 
