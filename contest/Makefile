@@ -9,7 +9,7 @@ all: $(TEST_BIN) $(OBJ) $(TEST_OBJ) $(HEADERS)
 $(OBJ): $(HEADERS)
 
 %.bin: %.o $(OBJ) $(TEST_OBJ)
-	$(CC) $(CFLAGS) -o $@ $(OBJ) $(@:.bin=.o)
+	$(CC) $(CFLAGS) -o $@ $(OBJ) $(@:.bin=.o) -lm
 
 clean:
 	rm -f $(TEST_BIN) $(OBJ) $(TEST_OBJ)
